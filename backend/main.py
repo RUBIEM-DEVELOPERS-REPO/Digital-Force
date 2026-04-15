@@ -61,6 +61,11 @@ async def lifespan(app: FastAPI):
     asyncio.create_task(agency_daemon())
     logger.info("🤖 Agency Daemon scheduled — Digital Force is autonomous")
 
+    # 📧 Start the Inbox Poller — listining for user email replies
+    from agent.tools.email_inbox import poll_email_inbox
+    asyncio.create_task(poll_email_inbox())
+    logger.info("📧 IMAP Inbox Poller scheduled")
+
     logger.info("✨ Digital Force is ready.")
 
     yield

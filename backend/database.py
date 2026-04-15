@@ -428,6 +428,34 @@ class AgencySettings(Base):
 # DATABASE ENGINE
 # ═══════════════════════════════════════════════════════════
 
+
+# ═══════════════════════════════════════════════════════════
+# PENDING EMAIL APPROVALS — Track approval emails awaiting reply
+# ═══════════════════════════════════════════════════════════
+
+class PendingEmailApproval(Base):
+    __tablename__ = "pending_email_approvals"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    token: Mapped[str] = mapped_column(String(36), unique=True, index=True)  # embedded in subject
+    user_id: Mapped[str] = mapped_column(String(36), index=True)
+
+    # What kind of decision this is
+    action_type: Mapped[str] = mapped_column(String(50))  # "high_risk" | "api_key_needed"
+
+    # Context for when we process the reply
+    skill_name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    goal_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
+    description: Mapped[str] = mapped_column(Text)
+
+    resolved: Mapped[bool] = mapped_column(Boolean, default=False)
+    resolution: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)  # "approved" | "skipped"
+
+    expires_at: Mapped[datetime] = mapped_column(DateTime)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    resolved_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+
 settings = get_settings()
 engine = create_async_engine(
     settings.database_url,

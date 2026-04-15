@@ -1,17 +1,20 @@
 """
 Digital Force — Agent Email Notification Utility
 
-Agents use this to notify the user via email when:
-  - A new API key is needed to unlock a capability
-  - A high-risk action needs explicit approval
-  - A campaign milestone is reached
-  - An autonomous brief is ready
+Sends branded HTML emails FROM digitalforce1st@gmail.com TO digitalforce1st@gmail.com
+(Reply-To is set so replies come back to the same inbox for polling).
 
-Uses the SMTP credentials already in .env (Gmail App Password supported).
+Each approval email embeds a unique token in the subject line:
+  [Digital Force | Ref: <token>]
+
+The inbox poller (email_inbox.py) reads replies, matches the token,
+and triggers the appropriate agent action.
 """
 
 import logging
+import uuid
 import smtplib
+from datetime import datetime, timedelta
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from typing import Optional
@@ -20,118 +23,135 @@ from config import get_settings
 logger = logging.getLogger(__name__)
 settings = get_settings()
 
+# Send FROM this address
+EMAIL_FROM      = settings.smtp_from_email or settings.smtp_username
+EMAIL_FROM_NAME = settings.smtp_from_name or "Digital Force"
+
 
 async def send_agent_email(
     subject: str,
     body_text: str,
     body_html: Optional[str] = None,
+    approval_token: Optional[str] = None,
     to_email: Optional[str] = None,
 ) -> bool:
     """
-    Send an email from Digital Force to the user.
-    Falls back gracefully if SMTP is not configured.
-
-    Returns True if sent successfully, False otherwise.
+    Send an email to the user's inbox.
+    If approval_token is provided, it's embedded in the subject for reply matching.
     """
     if not settings.smtp_username or not settings.smtp_password:
-        logger.warning("[Email] SMTP not configured — skipping email notification")
+        logger.warning("[Email] SMTP not configured — skipping")
         return False
 
-    recipient = to_email or settings.smtp_username  # Default: email the user's own address
+    recipient = to_email or settings.smtp_username
+    if not recipient:
+        return False
+
+    full_subject = f"[Digital Force] {subject}"
+    if approval_token:
+        full_subject += f" | Ref: {approval_token}"
 
     msg = MIMEMultipart("alternative")
-    msg["Subject"] = f"[Digital Force] {subject}"
-    msg["From"] = f"{settings.smtp_from_name} <{settings.smtp_from_email or settings.smtp_username}>"
-    msg["To"] = recipient
+    msg["Subject"]  = full_subject
+    msg["From"]     = f"{EMAIL_FROM_NAME} <{EMAIL_FROM}>"
+    msg["To"]       = recipient
+    msg["Reply-To"] = EMAIL_FROM  # Replies come back to the FROM inbox for IMAP polling
 
-    # Plain text version
     msg.attach(MIMEText(body_text, "plain"))
-
-    # HTML version (richer if provided)
-    if body_html:
-        msg.attach(MIMEText(body_html, "html"))
-    else:
-        # Auto-generate a clean HTML version from plain text
-        html_body = _auto_html(subject, body_text)
-        msg.attach(MIMEText(html_body, "html"))
+    html = body_html or _auto_html(subject, body_text, approval_token)
+    msg.attach(MIMEText(html, "html"))
 
     try:
         import asyncio
         loop = asyncio.get_event_loop()
         await loop.run_in_executor(None, _smtp_send, msg, recipient)
-        logger.info(f"[Email] ✅ Sent '{subject}' to {recipient}")
+        logger.info(f"[Email] ✅ Sent '{full_subject}' to {recipient}")
         return True
     except Exception as e:
-        logger.error(f"[Email] Failed to send email: {e}")
+        logger.error(f"[Email] Failed: {e}")
         return False
 
 
 def _smtp_send(msg: MIMEMultipart, recipient: str):
-    """Blocking SMTP send — run in executor so it doesn't block the event loop."""
     with smtplib.SMTP(settings.smtp_host, settings.smtp_port) as server:
         server.ehlo()
         server.starttls()
         server.login(settings.smtp_username, settings.smtp_password)
-        server.sendmail(
-            settings.smtp_from_email or settings.smtp_username,
-            recipient,
-            msg.as_string(),
-        )
+        server.sendmail(EMAIL_FROM, recipient, msg.as_string())
 
 
-def _auto_html(subject: str, text: str) -> str:
-    """Generate a clean branded HTML email from plain text."""
+def _auto_html(subject: str, text: str, token: Optional[str] = None) -> str:
     paragraphs = "".join(
-        f"<p style='margin:0 0 12px;line-height:1.6;'>{line}</p>"
-        for line in text.split("\n")
-        if line.strip()
+        f"<p style='margin:0 0 12px;line-height:1.6;color:rgba(255,255,255,0.75);'>{line}</p>"
+        for line in text.split("\n") if line.strip()
     )
-    return f"""
-<!DOCTYPE html>
-<html>
-<head><meta charset="utf-8"></head>
+    reply_hint = ""
+    if token:
+        reply_hint = """
+        <div style='margin-top:24px;padding:16px;border-radius:12px;background:rgba(124,58,237,0.12);border:1px solid rgba(124,58,237,0.25);'>
+          <p style='margin:0 0 8px;font-weight:600;color:#A78BFA;font-size:0.9rem;'>💬 How to respond</p>
+          <p style='margin:0;color:rgba(255,255,255,0.6);font-size:0.85rem;'>
+            Simply <strong style='color:#fff;'>reply to this email</strong> with one of:
+            <br><br>
+            &nbsp;&nbsp;✅ <strong>approve</strong> — to authorise and execute<br>
+            &nbsp;&nbsp;❌ <strong>skip</strong> — to drop this task<br>
+            <br>
+            Or open your <a href='http://localhost:3000/chat' style='color:#A78BFA;'>Digital Force dashboard</a> and respond in chat.
+          </p>
+        </div>
+        """
+
+    return f"""<!DOCTYPE html>
+<html><head><meta charset="utf-8"></head>
 <body style="margin:0;padding:0;background:#0d0d1a;font-family:Inter,Arial,sans-serif;">
   <table width="100%" cellpadding="0" cellspacing="0">
-    <tr>
-      <td align="center" style="padding:40px 20px;">
-        <table width="600" cellpadding="0" cellspacing="0" style="background:#13131f;border-radius:16px;border:1px solid rgba(255,255,255,0.08);overflow:hidden;">
-          <!-- Header -->
-          <tr>
-            <td style="padding:28px 32px;background:linear-gradient(135deg,#7C3AED22,#22D3EE11);border-bottom:1px solid rgba(255,255,255,0.06);">
-              <div style="display:flex;align-items:center;gap:10px;">
-                <span style="font-size:1.1rem;font-weight:700;color:#fff;">⚡ Digital Force</span>
-                <span style="font-size:0.75rem;color:rgba(255,255,255,0.35);margin-left:8px;">Autonomous Agency</span>
-              </div>
-            </td>
-          </tr>
-          <!-- Body -->
-          <tr>
-            <td style="padding:32px;">
-              <h2 style="margin:0 0 20px;font-size:1.15rem;font-weight:600;color:#fff;">{subject}</h2>
-              <div style="color:rgba(255,255,255,0.7);font-size:0.9rem;">
-                {paragraphs}
-              </div>
-            </td>
-          </tr>
-          <!-- Footer -->
-          <tr>
-            <td style="padding:20px 32px;border-top:1px solid rgba(255,255,255,0.06);">
-              <p style="margin:0;font-size:0.75rem;color:rgba(255,255,255,0.25);">
-                This message was sent autonomously by your Digital Force agents.<br>
-                Reply to this email or open your dashboard to respond.
-              </p>
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
+    <tr><td align="center" style="padding:40px 20px;">
+      <table width="600" cellpadding="0" cellspacing="0"
+        style="background:#13131f;border-radius:16px;border:1px solid rgba(255,255,255,0.08);overflow:hidden;">
+        <tr>
+          <td style="padding:28px 32px;background:linear-gradient(135deg,#7C3AED22,#22D3EE11);
+            border-bottom:1px solid rgba(255,255,255,0.06);">
+            <span style="font-size:1.1rem;font-weight:700;color:#fff;">⚡ Digital Force</span>
+            <span style="font-size:0.75rem;color:rgba(255,255,255,0.35);margin-left:10px;">Autonomous Agency</span>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:32px;">
+            <h2 style="margin:0 0 20px;font-size:1.1rem;font-weight:600;color:#fff;">{subject}</h2>
+            {paragraphs}
+            {reply_hint}
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:16px 32px;border-top:1px solid rgba(255,255,255,0.06);">
+            <p style="margin:0;font-size:0.72rem;color:rgba(255,255,255,0.2);">
+              Sent autonomously by your Digital Force agents.
+              {f"Reference: {token}" if token else ""}
+            </p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
   </table>
-</body>
-</html>
-"""
+</body></html>"""
 
 
-# ─── Specialised agent-level helpers ─────────────────────────────────────────
+# ─── Specialised helpers ──────────────────────────────────────────────────────
+
+async def _get_user_email(user_id: str) -> Optional[str]:
+    if not user_id:
+        return None
+    try:
+        from database import async_session, User
+        from sqlalchemy import select
+        async with async_session() as session:
+            stmt = select(User.email).where(User.id == user_id)
+            result = await session.execute(stmt)
+            return result.scalar_one_or_none()
+    except Exception as e:
+        logger.error(f"[Email] Failed to fetch user email: {e}")
+        return None
+
 
 async def notify_api_key_needed(
     capability: str,
@@ -139,75 +159,104 @@ async def notify_api_key_needed(
     signup_url: str,
     why_needed: str,
     is_free: bool,
-    user_email: Optional[str] = None,
-) -> bool:
+    user_id: str = "",
+    goal_id: str = "",
+) -> Optional[str]:
     """
-    Notify via email when an agent needs a new API credential.
-    Also returns the message text so the caller can push it to chat.
+    Notify about a missing API credential.
+    Returns the approval token (stored in DB by caller).
     """
-    free_note = "✅ Free tier available — no credit card needed." if is_free else "⚠️ Paid API — check pricing before signing up."
+    to_email = await _get_user_email(user_id)
+    
+    free_note = "✅ Free tier available — no credit card needed." if is_free else "⚠️ May require a paid plan — check pricing before signing up."
     subject = f"Action Required: API Key Needed for {capability}"
-    body = f"""Your Digital Force agents want to unlock a new capability: {capability}
+    body = f"""Your Digital Force agents want to unlock a new capability but need a credential.
+
+Capability: {capability}
 
 Why this is needed:
 {why_needed}
 
-API Required: {api_name}
+API / Service: {api_name}
 {free_note}
+Sign up: {signup_url}
 
-Sign up here: {signup_url}
-
-Once you have the key:
-1. Go to your Digital Force dashboard → Settings → Integrations
-2. Add the key in the relevant field
-3. Your agents will automatically pick it up and retry the task
-
-This capability will permanently expand what your agency can do.
+Once you have the key, add it in your dashboard under Settings → Integrations.
+Your agents will automatically retry the stalled task.
 
 — Your Digital Force Agents"""
 
-    return await send_agent_email(subject, body, to_email=user_email)
+    token = str(uuid.uuid4())[:8].upper()
+    await send_agent_email(subject, body, approval_token=token, to_email=to_email)
+    return token
 
 
 async def notify_high_risk_approval(
     action_description: str,
     risk_reason: str,
     skill_name: str,
-    user_email: Optional[str] = None,
-) -> bool:
+    user_id: str = "",
+    goal_id: str = "",
+) -> Optional[str]:
     """
-    Email the user when SkillForge has forged a high-risk skill and needs approval.
+    Email user for high-risk approval. Returns the token stored in PendingEmailApproval.
     """
+    to_email = await _get_user_email(user_id)
+    
     subject = f"Approval Required: {action_description}"
-    body = f"""Your Digital Force agents have forged a solution to a problem they encountered, but need your approval before proceeding.
+    body = f"""Your Digital Force agents have built a fix for a roadblock but need your green light.
 
 Action: {action_description}
 
-Why approval is needed:
+Why this needs your approval:
 {risk_reason}
 
-Skill created: {skill_name}
+Skill built: {skill_name}
 
-To approve: Open your Digital Force chat and reply 'approve' or 'go ahead'.
-To skip: Reply 'skip' or 'drop it'.
+Reply to this email with:
+  approve — to authorise and execute
+  skip — to drop this task
 
-If you ignore this, the task will remain paused until you respond.
+Or respond in your Digital Force chat dashboard.
 
 — Your Digital Force Agents"""
 
-    return await send_agent_email(subject, body, to_email=user_email)
+    token = str(uuid.uuid4())[:8].upper()
+
+    # Store in DB so inbox poller can match replies
+    try:
+        from database import PendingEmailApproval, async_session
+        from datetime import timedelta
+        async with async_session() as session:
+            session.add(PendingEmailApproval(
+                id=str(uuid.uuid4()),
+                token=token,
+                user_id=user_id,
+                action_type="high_risk",
+                skill_name=skill_name,
+                goal_id=goal_id,
+                description=action_description,
+                expires_at=datetime.utcnow() + timedelta(hours=48),
+            ))
+            await session.commit()
+    except Exception as e:
+        logger.error(f"[Email] Could not store pending approval: {e}")
+
+    await send_agent_email(subject, body, approval_token=token, to_email=to_email)
+    return token
 
 
 async def notify_campaign_complete(
     campaign_title: str,
     summary: str,
     metrics: dict,
-    user_email: Optional[str] = None,
+    user_id: str = "",
 ) -> bool:
-    """Email summary when a campaign finishes."""
+    to_email = await _get_user_email(user_id)
+    
     subject = f"Campaign Complete: {campaign_title}"
-    metrics_text = "\n".join([f"  • {k}: {v}" for k, v in metrics.items()]) or "  No metrics yet."
-    body = f"""Your campaign has completed.
+    metrics_text = "\n".join([f"  • {k}: {v}" for k, v in metrics.items()]) or "  No metrics recorded yet."
+    body = f"""Your campaign has finished.
 
 Campaign: {campaign_title}
 
@@ -217,8 +266,7 @@ Summary:
 Results:
 {metrics_text}
 
-Open your Digital Force dashboard to see full analytics.
+Check your Digital Force dashboard for full analytics.
 
 — Your Digital Force Agents"""
-
-    return await send_agent_email(subject, body, to_email=user_email)
+    return await send_agent_email(subject, body, to_email=to_email)
