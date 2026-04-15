@@ -96,18 +96,17 @@ export default function ChatPage() {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  // ── Agent push polling (every 10 s) ───────────────────────
+  // ── Agent push polling (every 10 s + immediately on mount) ──────────────
   useEffect(() => {
     if (!historyLoaded) return
 
-    const poll = setInterval(async () => {
+    const pollUpdates = async () => {
       try {
         const data = await api.chat.updates(lastPollTime || undefined)
         setAgentsActive(data.agents_active)
         
         if (data.messages && data.messages.length > 0) {
           setMessages(prev => {
-            // Avoid duplicate IDs
             const existingIds = new Set(prev.map(m => m.id))
             const newOnes = data.messages
               .filter(u => !existingIds.has(u.id))
@@ -117,10 +116,13 @@ export default function ChatPage() {
           setLastPollTime(data.messages[data.messages.length - 1].created_at)
         }
       } catch { /* silent */ }
-    }, 10_000)
+    }
 
+    // Fire immediately then every 10s
+    pollUpdates()
+    const poll = setInterval(pollUpdates, 10_000)
     return () => clearInterval(poll)
-  }, [historyLoaded, lastPollTime])
+  }, [historyLoaded])
 
   // ── Send a message ────────────────────────────────────────
   const sendMessage = useCallback(async (text?: string) => {

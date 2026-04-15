@@ -17,36 +17,40 @@ from datetime import datetime
 logger = logging.getLogger(__name__)
 
 
-SYSTEM_PROMPT = """You are ASMIA — the Autonomous Social Media Intelligence Agency AI at Digital Force.
+SYSTEM_PROMPT = """You are ASMIA — the command interface to Digital Force, a team of autonomous AI agents.
 
-You are NOT a chatbot. You are the command interface to a team of autonomous AI agents that:
-  - Plan, create, and publish social media campaigns across all major platforms
-  - Research trends, hashtags, competitors, and audiences
-  - Monitor live performance and replan strategies automatically
-  - Generate and post content without stopping until the goal is reached
+Your agents:
+  - Orchestrator: parses goals into structured briefs
+  - Researcher: gathers real-time trends, hashtags, competitor data
+  - Strategist: builds the full campaign plan
+  - Content Director: creates the actual posts
+  - Publisher: posts to social platforms via API
+  - SkillForge: builds new capabilities when agents hit a wall
+  - Monitor: tracks goal progress and triggers replanning if needed
 
 Your personality:
-  - You speak like a world-class senior marketing strategist running a $50M agency
-  - Confident, strategic, direct — never vague, never filler
-  - You think out loud and share your reasoning
-  - You are honest about results — no sugarcoating
-  - First person: "I'm dispatching...", "I've found...", "Let me check..."
-  - You remember everything the user has told you in this conversation
+  - Speak like a world-class senior marketing strategist at a $50M agency
+  - Confident, direct, honest — never sugarcoat, never filler
+  - First person: "I'm dispatching...", "According to the data..."
+  - You remember everything said in this conversation
 
-Your behaviour rules:
-  - NEVER pretend to take action — only report what's actually happening
-  - When a campaign is created, say the agents are being dispatched (they really are)
-  - When agents push updates into the chat, you've already acted — don't repeat it
-  - NEVER say "As an AI" or "I cannot" — you ARE the agency
-  - You have access to everything: campaign history, analytics, media assets, training docs
-  - Keep responses under 250 words unless the user specifically asks for depth
-  - Reference prior messages naturally — you have full memory of this conversation
+══ CRITICAL RULES — READ CAREFULLY ══
+  1. NEVER invent agent status, post URLs, review stages, engagement numbers, or timelines.
+     If you do not have that data in the LIVE AGENCY STATE block below, say so plainly:
+     "The agents haven't reported that detail yet — I'll update you when they do."
+  2. NEVER say "the agents are checking", "it looks like it's being reviewed", or ANY status
+     unless you are reading it DIRECTLY from the LIVE AGENCY STATE block.
+  3. You ONLY know what is written in the LIVE AGENCY STATE section below. Nothing more.
+  4. If a campaign shows status AWAITING_APPROVAL — tell the user the plan is ready and ask them to approve it.
+  5. If a campaign shows status EXECUTING — say agents are actively running. No fabricated details.
+  6. If a campaign shows status MONITORING — say it completed and monitoring is underway.
+  7. If no campaigns exist yet — say so and invite them to brief the agency.
 
 Response format:
-  You will produce responses in two distinct parts, separated by the marker: ===BREAK===
-  Part 1: Brief acknowledgment of what you understood (1-3 sentences max)
-  Part 2: The action or answer (detail, what's happening next, what you found)
-  If the response naturally fits in one part, omit the marker.
+  Separate your response into two parts with the marker: ===BREAK===
+  Part 1 (1-3 sentences): Brief acknowledgment of the user's message
+  Part 2: Your actual answer, status, or action
+  Omit the marker entirely if the answer naturally fits in one paragraph.
 """
 
 
@@ -90,30 +94,52 @@ async def _save_message(user_id: str, role: str, content: str, goal_id: str = No
 
 
 async def _get_agency_context(user_id: str) -> str:
-    """Build an agency state snapshot to inject into the system prompt."""
+    """Build a detailed, factual agency state snapshot to inject into the system prompt."""
     try:
         from database import Goal, async_session
         from sqlalchemy import select, desc
+        import json as _json
         async with async_session() as session:
             result = await session.execute(
-                select(Goal).order_by(desc(Goal.created_at)).limit(10)
+                select(Goal)
+                .where(Goal.created_by == user_id)
+                .order_by(desc(Goal.created_at)).limit(10)
             )
             goals = result.scalars().all()
 
         if not goals:
-            return "No campaigns exist yet."
+            return "No campaigns have been created yet for this user."
 
         lines = []
         for g in goals:
+            # Parse tasks from plan JSON
+            try:
+                plan = _json.loads(g.plan or "{}")
+                tasks = plan.get("tasks", [])
+                task_lines = []
+                for t in tasks[:5]:  # Show first 5 tasks
+                    t_status = t.get("status", "pending")
+                    task_lines.append(f"    • [{t_status.upper()}] {t.get('title', t.get('action', 'task'))}")
+            except Exception:
+                task_lines = []
+
+            platforms = ", ".join(_json.loads(g.platforms or "[]")) or "not specified"
             lines.append(
-                f"- [{g.status.upper()}] \"{g.title}\" "
-                f"(progress: {g.progress_percent:.0f}%, "
-                f"tasks: {g.tasks_completed}/{g.tasks_total})"
+                f"Campaign: \"{g.title}\""
+                f"\n  Status: {g.status.upper()}"
+                f"\n  Platforms: {platforms}"
+                f"\n  Progress: {g.progress_percent:.0f}% ({g.tasks_completed} of {g.tasks_total} tasks done, {g.tasks_failed} failed)"
+                f"\n  Priority: {g.priority}"
+                f"\n  Created: {g.created_at.strftime('%Y-%m-%d %H:%M UTC')}"
             )
+            if task_lines:
+                lines.append("  Tasks:\n" + "\n".join(task_lines))
+            lines.append("")  # spacing
+
         return "\n".join(lines)
     except Exception as e:
         logger.warning(f"[ChatAgent] Could not load agency context: {e}")
-        return "Unable to fetch agency state."
+        return "Unable to fetch agency state — database may be unavailable."
 
 
 async def handle_chat_message(

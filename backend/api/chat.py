@@ -116,7 +116,7 @@ async def get_chat_updates(
     # 1. Fetch active goals to determine if agents are currently running
     active_goals_query = select(Goal).where(
         Goal.created_by == user_id,
-        Goal.status.in_(["planning", "executing"])
+        Goal.status.in_(["planning", "executing", "awaiting_approval", "monitoring"])
     ).limit(1)
     active_goals_result = await db.execute(active_goals_query)
     agents_active = active_goals_result.first() is not None
