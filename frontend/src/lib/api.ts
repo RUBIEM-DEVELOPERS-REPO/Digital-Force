@@ -34,11 +34,18 @@ async function request<T>(
   const res = await fetch(`${BASE}${path}`, { ...options, headers })
 
   if (res.status === 401) {
-    if (typeof window !== 'undefined') {
+    // Only auto-logout on protected routes, not on the login/register endpoints themselves
+    const isAuthEndpoint = path.startsWith('/api/auth/')
+    if (!isAuthEndpoint && typeof window !== 'undefined') {
       localStorage.clear()
       window.location.href = '/login'
     }
-    throw new ApiError('Unauthorized', 401)
+    let msg = 'Invalid credentials'
+    try {
+      const err = await res.json()
+      msg = err.detail || err.message || msg
+    } catch { /* ignore */ }
+    throw new ApiError(msg, 401)
   }
 
   if (!res.ok) {
