@@ -97,6 +97,8 @@ def build_execution_graph() -> StateGraph:
     })
     graph.add_conditional_edges("skillforge", route_after_skillforge, {
         "monitor": "monitor",
+        "publisher": "publisher",
+        END: END,
     })
     graph.add_conditional_edges("monitor", route_after_monitor, {
         "strategist": "strategist",

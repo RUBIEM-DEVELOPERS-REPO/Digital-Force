@@ -257,7 +257,7 @@ const api = {
 
   chat: {
     history: () => GET<{ id: string; role: 'user' | 'assistant' | 'agent'; content: string; agent_name?: string; goal_id?: string; created_at: string }[]>('/api/chat/history'),
-    updates: (since?: string) => GET<{ id: string; role: 'user' | 'assistant' | 'agent'; content: string; agent_name?: string; goal_id?: string; created_at: string }[]>(
+    updates: (since?: string) => GET<{ agents_active: boolean; messages: { id: string; role: 'user' | 'assistant' | 'agent'; content: string; agent_name?: string; goal_id?: string; created_at: string }[] }>(
       `/api/chat/updates${since ? `?since=${encodeURIComponent(since)}` : ''}`
     ),
     clearHistory: () => DEL<{ status: string }>('/api/chat/history'),

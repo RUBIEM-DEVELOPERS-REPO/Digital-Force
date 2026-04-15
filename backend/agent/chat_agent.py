@@ -194,36 +194,54 @@ CONVERSATION RULES:
     bubble_count += 1
 
     try:
+        marker = "[BUBBLE_BREAK]"
+        buffer = ""
+
         async for token in stream_chat_with_history(
             system=system,
             messages=groq_history,
             temperature=0.7,
             max_tokens=1500,
         ):
-            # Check for the bubble break marker in the accumulated buffer
-            if "[BUBBLE_BREAK]" in (current_bubble_content + token):
-                # Close current bubble
-                # Strip the marker from what we've emitted
-                clean_before = (current_bubble_content + token).replace("[BUBBLE_BREAK]", "").rstrip()
-                # We already streamed current_bubble_content token by token;
-                # for the marker itself we just silently transition
-                yield {"type": "bubble_end", "bubble_id": current_bubble_id}
-                full_response += current_bubble_content
+            buffer += token
 
-                # Brief pause for UX — frontend shows inter-bubble typing dots
+            if marker in buffer:
+                # Marker found! Close current bubble
+                yield {"type": "bubble_end", "bubble_id": current_bubble_id}
+                
+                # Take everything before the marker, just in case
+                clean_before = buffer.replace(marker, "")
+                if clean_before:
+                    full_response += clean_before
+                    yield {"type": "message", "content": clean_before, "bubble_id": current_bubble_id}
+
+                buffer = ""
                 await asyncio.sleep(0.4)
 
                 # Start next bubble
                 current_bubble_id = str(uuid.uuid4())
-                current_bubble_content = ""
                 bubble_count += 1
                 yield {"type": "bubble_start", "bubble_id": current_bubble_id}
                 continue
 
-            full_response += token
-            current_bubble_content += token
-            yield {"type": "message", "content": token, "bubble_id": current_bubble_id}
-            await asyncio.sleep(0)
+            # Check if buffer ends with a partial chunk of the marker
+            is_partial = False
+            for i in range(1, len(marker)):
+                if buffer.endswith(marker[:i]):
+                    is_partial = True
+                    break
+
+            if not is_partial:
+                # Safe to yield the buffer completely
+                full_response += buffer
+                yield {"type": "message", "content": buffer, "bubble_id": current_bubble_id}
+                buffer = ""
+                await asyncio.sleep(0)
+
+        if buffer:
+            # Yield any remaining text
+            full_response += buffer
+            yield {"type": "message", "content": buffer, "bubble_id": current_bubble_id}
 
     except Exception as e:
         logger.error(f"[ChatAgent] LLM stream error: {e}")
@@ -246,7 +264,25 @@ CONVERSATION RULES:
             yield {"type": "action", "content": "✅ Agents deployed — updates will appear in this chat."}
         except Exception as e:
             logger.warning(f"[ChatAgent] Goal dispatch failed: {e}")
-
+            
+    elif any(k in msg_lower for k in approve_kw):
+        try:
+            from database import Goal, async_session
+            from sqlalchemy import select, desc
+            async with async_session() as session:
+                result = await session.execute(
+                    select(Goal)
+                    .where(Goal.created_by == user_id)
+                    .order_by(desc(Goal.created_at)).limit(1)
+                )
+                goal = result.scalar_one_or_none()
+            
+            if goal:
+                yield {"type": "action", "content": "✅ Executing approved tasks..."}
+                from api.goals import _run_execution_agent
+                asyncio.create_task(_run_execution_agent(goal.id))
+        except Exception as e:
+            logger.warning(f"[ChatAgent] Auto-approval failed: {e}")
 
 async def _create_goal_and_dispatch(message: str, user_id: str) -> None:
     """Create a Goal and fire the LangGraph planning graph as a background task."""

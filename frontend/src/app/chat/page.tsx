@@ -71,6 +71,7 @@ export default function ChatPage() {
   const [loading, setLoading]           = useState(false)
   const [historyLoaded, setHistoryLoaded] = useState(false)
   const [lastPollTime, setLastPollTime] = useState<string | null>(null)
+  const [agentsActive, setAgentsActive] = useState(false)
 
   const bottomRef    = useRef<HTMLDivElement>(null)
   const textareaRef  = useRef<HTMLTextAreaElement>(null)
@@ -101,17 +102,19 @@ export default function ChatPage() {
 
     const poll = setInterval(async () => {
       try {
-        const updates = await api.chat.updates(lastPollTime || undefined)
-        if (updates.length > 0) {
+        const data = await api.chat.updates(lastPollTime || undefined)
+        setAgentsActive(data.agents_active)
+        
+        if (data.messages && data.messages.length > 0) {
           setMessages(prev => {
             // Avoid duplicate IDs
             const existingIds = new Set(prev.map(m => m.id))
-            const newOnes = updates
+            const newOnes = data.messages
               .filter(u => !existingIds.has(u.id))
               .map(historyToMessage)
             return newOnes.length > 0 ? [...prev, ...newOnes] : prev
           })
-          setLastPollTime(updates[updates.length - 1].created_at)
+          setLastPollTime(data.messages[data.messages.length - 1].created_at)
         }
       } catch { /* silent */ }
     }, 10_000)
@@ -516,6 +519,31 @@ export default function ChatPage() {
             </div>
           )}
         </div>
+
+        {/* Agents Working Indicator */}
+        {agentsActive && !loading && (
+          <div style={{
+            display: 'flex', justifyContent: 'center', alignItems: 'center',
+            padding: '8px 0 0 0', position: 'relative', zIndex: 10
+          }}>
+            <div style={{
+              display: 'inline-flex', alignItems: 'center', gap: 10,
+              background: 'rgba(34, 211, 238, 0.1)', border: '1px solid rgba(34, 211, 238, 0.2)',
+              borderRadius: 20, padding: '4px 16px', fontSize: '0.75rem', color: '#22D3EE',
+              animation: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+              boxShadow: '0 0 10px rgba(34, 211, 238, 0.2)'
+            }}>
+              <span className="thinking-dot" style={{ width: 6, height: 6, background: '#22D3EE' }} />
+              agents working...
+            </div>
+            <style jsx>{`
+              @keyframes pulse {
+                0%, 100% { opacity: 1; border-color: rgba(34, 211, 238, 0.4); }
+                50% { opacity: 0.6; border-color: rgba(34, 211, 238, 0.1); }
+              }
+            `}</style>
+          </div>
+        )}
 
         {/* Input */}
         <div style={{

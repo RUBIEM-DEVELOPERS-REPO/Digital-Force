@@ -108,9 +108,20 @@ async def get_chat_updates(
     """
     Polling endpoint for agent-pushed messages since a given timestamp.
     Frontend calls this every 10s to pick up autonomous agent updates.
+    Returns { "messages": [...], "agents_active": True/False }
     """
+    from database import Goal
     user_id = user.get("sub", "unknown")
 
+    # 1. Fetch active goals to determine if agents are currently running
+    active_goals_query = select(Goal).where(
+        Goal.created_by == user_id,
+        Goal.status.in_(["planning", "executing"])
+    ).limit(1)
+    active_goals_result = await db.execute(active_goals_query)
+    agents_active = active_goals_result.first() is not None
+
+    # 2. Fetch new agent messages
     query = (
         select(ChatMessage)
         .where(ChatMessage.user_id == user_id)
@@ -130,17 +141,20 @@ async def get_chat_updates(
     result = await db.execute(query)
     messages = result.scalars().all()
 
-    return [
-        {
-            "id": m.id,
-            "role": m.role,
-            "content": m.content,
-            "agent_name": m.agent_name,
-            "goal_id": m.goal_id,
-            "created_at": m.created_at.isoformat(),
-        }
-        for m in messages
-    ]
+    return {
+        "agents_active": agents_active,
+        "messages": [
+            {
+                "id": m.id,
+                "role": m.role,
+                "content": m.content,
+                "agent_name": m.agent_name,
+                "goal_id": m.goal_id,
+                "created_at": m.created_at.isoformat(),
+            }
+            for m in messages
+        ]
+    }
 
 
 @router.delete("/history")
