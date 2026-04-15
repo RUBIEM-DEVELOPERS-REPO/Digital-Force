@@ -35,7 +35,8 @@ export default function LoginPage() {
       setToken(data.access_token)
       const me = await api.auth.me()
       setUser(me)
-      router.push('/')
+      // Hard redirect so localStorage token is committed before next page loads
+      window.location.href = '/'
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Authentication failed. Check your credentials.')
     } finally {

@@ -36,9 +36,9 @@ async function request<T>(
   if (res.status === 401) {
     // Only auto-logout on protected routes, not on the login/register endpoints themselves
     const isAuthEndpoint = path.startsWith('/api/auth/')
-    if (!isAuthEndpoint && typeof window !== 'undefined') {
+    if (!isAuthEndpoint && typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
       localStorage.clear()
-      window.location.href = '/login'
+      window.location.replace('/login')
     }
     let msg = 'Invalid credentials'
     try {
