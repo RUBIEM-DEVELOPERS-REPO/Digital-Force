@@ -22,7 +22,7 @@ from database import async_session, PendingEmailApproval, ChatMessage
 logger = logging.getLogger(__name__)
 settings = get_settings()
 
-POLL_INTERVAL_SEC = 60
+POLL_INTERVAL_SEC = 120
 
 
 def _get_imap_host() -> str:
@@ -127,7 +127,10 @@ def _check_inbox(host: str):
         mail.close()
         mail.logout()
     except Exception as e:
-        logger.error(f"[InboxPoller] IMAP connection failed: {e}")
+        if "EOF" in str(e):
+            logger.info(f"[InboxPoller] IMAP timeout/EOF (expected if no new mail). Retrying next cycle.")
+        else:
+            logger.error(f"[InboxPoller] IMAP connection failed: {e}")
 
 
 async def _process_approval_reply(token: str, resolution: str):

@@ -38,9 +38,9 @@ async function request<T>(
     // We use clearToken() (not localStorage.clear()) so only auth data is wiped,
     // and the cookie is also cleared for middleware consistency.
     const isAuthEndpoint = path.startsWith('/api/auth/')
-    if (!isAuthEndpoint && typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
+    if (!isAuthEndpoint && typeof window !== 'undefined' && !window.location.pathname.startsWith('/landing')) {
       clearToken()
-      window.location.replace('/login')
+      window.location.replace('/landing')
     }
     let msg = 'Invalid credentials'
     try {

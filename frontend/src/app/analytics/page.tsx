@@ -17,9 +17,9 @@ const PLATFORM_COLORS: Record<string, string> = {
   tiktok: '#FF0050', instagram: '#E1306C', youtube: '#FF0000', unknown: '#6B7280',
 }
 
-const PLATFORM_EMOJI: Record<string, string> = {
-  linkedin: '💼', facebook: '👥', twitter: '🐦',
-  tiktok: '🎵', instagram: '📸', youtube: '▶️',
+const PLATFORM_LABELS: Record<string, string> = {
+  linkedin: 'LinkedIn', facebook: 'Facebook', twitter: 'X / Twitter',
+  tiktok: 'TikTok', instagram: 'Instagram', youtube: 'YouTube',
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -33,19 +33,25 @@ function StatCard({ label, value, icon: Icon, color, sublabel }: {
   color: string; sublabel?: string
 }) {
   return (
-    <div className="glass-panel animate-slide-up" style={{ padding: '1.25rem 1.5rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+    <div style={{
+      padding: '1.5rem', display: 'flex', alignItems: 'center', gap: '1rem',
+      background: 'linear-gradient(135deg, rgba(15,23,42,0.6) 0%, rgba(15,23,42,0.2) 100%)',
+      border: '1px solid rgba(255,255,255,0.04)', borderRadius: '1rem',
+      backdropFilter: 'blur(12px)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.03)',
+    }}>
       <div style={{
         width: 48, height: 48, borderRadius: 14, flexShrink: 0,
-        background: `${color}15`, display: 'flex', alignItems: 'center', justifyContent: 'center',
+        background: `${color}12`, border: `1px solid ${color}22`,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
       }}>
         <Icon size={22} style={{ color }} />
       </div>
       <div>
-        <div style={{ fontSize: '1.75rem', fontWeight: 800, color: '#fff', lineHeight: 1 }}>
+        <div style={{ fontSize: '1.75rem', fontWeight: 900, color: '#F8FAFC', lineHeight: 1, letterSpacing: '-0.04em' }}>
           {typeof value === 'number' ? value.toLocaleString() : value}
         </div>
-        <div style={{ fontSize: '0.78rem', color: 'rgba(255,255,255,0.45)', marginTop: 4 }}>{label}</div>
-        {sublabel && <div style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.25)', marginTop: 2 }}>{sublabel}</div>}
+        <div style={{ fontSize: '0.68rem', fontWeight: 700, color: '#475569', marginTop: 5, letterSpacing: '0.06em' }}>{label.toUpperCase()}</div>
+        {sublabel && <div style={{ fontSize: '0.72rem', color: '#334155', marginTop: 2 }}>{sublabel}</div>}
       </div>
     </div>
   )
@@ -55,11 +61,12 @@ const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?:
   if (!active || !payload?.length) return null
   return (
     <div style={{
-      background: 'rgba(15,15,25,0.95)', border: '1px solid rgba(255,255,255,0.1)',
+      background: 'rgba(8,11,18,0.95)', border: '1px solid rgba(0,163,255,0.15)',
       borderRadius: 10, padding: '0.6rem 0.9rem', fontSize: '0.82rem', color: '#fff',
+      backdropFilter: 'blur(12px)',
     }}>
-      <div style={{ color: 'rgba(255,255,255,0.5)', marginBottom: 4 }}>{label}</div>
-      <div style={{ color: '#A78BFA', fontWeight: 700 }}>{payload[0]?.value} posts</div>
+      <div style={{ color: '#475569', marginBottom: 4, fontWeight: 700, letterSpacing: '0.04em' }}>{label}</div>
+      <div style={{ color: '#33BAFF', fontWeight: 700 }}>{payload[0]?.value} posts</div>
     </div>
   )
 }
@@ -90,14 +97,13 @@ export default function AnalyticsPage() {
     <div style={{ display: 'flex', minHeight: '100vh' }}>
       <Sidebar />
       <main style={{ flex: 1, padding: '2rem', overflowY: 'auto' }}>
-        <div className="animate-slide-up" style={{ marginBottom: '2rem' }}>
-          <h1 style={{
-            fontSize: '1.75rem', fontWeight: 700, color: '#fff',
-            background: 'linear-gradient(135deg, #fff 30%, rgba(255,255,255,0.5))',
-            WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-          }}>Analytics</h1>
-          <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.875rem', marginTop: 4 }}>
-            Real-time performance across all campaigns
+        <div style={{ padding: '3rem 3rem 2rem', borderBottom: '1px solid rgba(255,255,255,0.03)', marginBottom: '2rem' }}>
+          <div style={{ fontSize: '0.72rem', color: '#334155', fontWeight: 700, letterSpacing: '0.1em', marginBottom: '0.75rem' }}>DIGITAL FORCE — INTELLIGENCE</div>
+          <h1 style={{ fontSize: '2.5rem', fontWeight: 900, letterSpacing: '-0.035em', background: 'linear-gradient(180deg, #FFFFFF 0%, #94A3B8 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', lineHeight: 1.1, marginBottom: '0.625rem' }}>
+            Analytics
+          </h1>
+          <p style={{ fontSize: '0.875rem', color: '#475569' }}>
+            Real-time performance intelligence across all active directives
           </p>
         </div>
 
@@ -139,7 +145,7 @@ export default function AnalyticsPage() {
               {/* Posts per day line chart */}
               <div className="glass-panel" style={{ padding: '1.5rem' }}>
                 <div style={{ fontWeight: 600, color: '#fff', marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <BarChart2 size={16} style={{ color: '#A78BFA' }} /> Posts per Day (30 days)
+                  <BarChart2 size={16} style={{ color: '#33BAFF' }} /> Posts per Day (30 days)
                 </div>
                 {data.posts_per_day.some(d => d.count > 0) ? (
                   <ResponsiveContainer width="100%" height={180}>
@@ -154,9 +160,9 @@ export default function AnalyticsPage() {
                       <YAxis tick={{ fontSize: 10, fill: 'rgba(255,255,255,0.35)' }}
                         axisLine={false} tickLine={false} />
                       <Tooltip content={<CustomTooltip />} />
-                      <Line type="monotone" dataKey="count" stroke="#7C3AED"
-                        strokeWidth={2} dot={false}
-                        activeDot={{ r: 4, fill: '#A78BFA' }} />
+                      <Line type="monotone" dataKey="count" stroke="#4F46E5"
+                        strokeWidth={2.5} dot={false}
+                        activeDot={{ r: 4, fill: '#33BAFF' }} />
                     </LineChart>
                   </ResponsiveContainer>
                 ) : (

@@ -8,5 +8,9 @@ if not exist node_modules (
 )
 
 echo.
-echo Starting Next.js dev server on port 3000...
-npm run dev
+echo Clearing Next.js cache to prevent proxy hangs...
+if exist .next rmdir /s /q .next
+
+echo.
+echo Starting Next.js dev server on port 3000 (Webpack mode)...
+npm run dev -- --webpack

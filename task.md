@@ -1,0 +1,19 @@
+- [/] Initialize Execution Phase
+  - [x] Create Implementation Plan
+  - [/] Install dependencies (`framer-motion`, `clsx`, `tailwind-merge`)
+- [ ] Theme Overhaul (Electric Sapphire & Obsidian)
+  - [ ] Rewrite `globals.css` colors and gradients
+  - [ ] Implement Neon Blue scrollbars & custom animations
+- [ ] Name & Branding Audit
+  - [ ] Scrub "ASMIA"
+- [ ] Landing Page UI (`app/page.tsx`)
+  - [ ] Develop Cinematic Hero
+  - [ ] Build Modal Overlay for Auth Instead of direct link
+- [ ] Central Navigation Restructure
+  - [ ] Refactor `Sidebar.tsx` (Icons, Names, Active States)
+- [ ] Feature Merges & Components
+  - [ ] Create `app/knowledge` combined route
+  - [ ] Delete `/media` and `/training`
+  - [ ] Rebuild Chat UI ("Neural Link")
+  - [ ] Rebuild Analytics graphs
+  - [ ] Rebuild Goals/Skills with 3D tilts

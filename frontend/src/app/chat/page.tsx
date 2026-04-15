@@ -32,22 +32,22 @@ interface Message {
 
 // ─── Agent visual config ────────────────────────────────────
 
-const AGENT_CONFIG: Record<string, { emoji: string; label: string; color: string }> = {
-  orchestrator:     { emoji: '🎯', label: 'Orchestrator',     color: '#F59E0B' },
-  researcher:       { emoji: '🔍', label: 'Researcher',       color: '#3B82F6' },
-  strategist:       { emoji: '📋', label: 'Strategist',       color: '#8B5CF6' },
-  content_director: { emoji: '✍️',  label: 'Content Director', color: '#EC4899' },
-  publisher:        { emoji: '📤', label: 'Publisher',        color: '#10B981' },
-  skillforge:       { emoji: '⚡', label: 'SkillForge',       color: '#F97316' },
-  monitor:          { emoji: '📊', label: 'Monitor',          color: '#06B6D4' },
+const AGENT_CONFIG: Record<string, { initials: string; label: string; color: string }> = {
+  orchestrator:     { initials: 'OR', label: 'Orchestrator',     color: '#F59E0B' },
+  researcher:       { initials: 'RE', label: 'Researcher',       color: '#3B82F6' },
+  strategist:       { initials: 'ST', label: 'Strategist',       color: '#8B5CF6' },
+  content_director: { initials: 'CD', label: 'Content Director', color: '#EC4899' },
+  publisher:        { initials: 'PB', label: 'Publisher',        color: '#10B981' },
+  skillforge:       { initials: 'SF', label: 'SkillForge',       color: '#F97316' },
+  monitor:          { initials: 'MN', label: 'Monitor',          color: '#00A3FF' },
 }
 
 const SUGGESTED_PROMPTS = [
-  'Create a 2-week LinkedIn campaign for a SaaS product',
-  'What campaigns are currently active and how are they performing?',
-  'Show me what\'s scheduled for this week',
-  'Replan my top campaign with more video content',
-  'Which platform is delivering the best results?',
+  'Deploy a 2-week LinkedIn campaign for a SaaS product launch',
+  'What directives are active and how are they performing?',
+  'What operations are scheduled for this week?',
+  'Rebuild the top campaign strategy with a heavier video focus',
+  'Which platform is generating the highest engagement rate?',
 ]
 
 // ─── Helper: convert a DB history record to a Message ──────
@@ -318,22 +318,22 @@ export default function ChatPage() {
         <div style={{
           width: 32, height: 32, borderRadius: 10, flexShrink: 0,
           background: isUser
-            ? 'rgba(167,139,250,0.15)'
+            ? 'rgba(0,163,255,0.12)'
             : isAgent && agentCfg
               ? `${agentCfg.color}22`
-              : 'linear-gradient(135deg, #7C3AED, #4F46E5)',
+              : 'linear-gradient(135deg, #00A3FF, #006199)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           border: isUser
-            ? '1px solid rgba(167,139,250,0.25)'
+            ? '1px solid rgba(0,163,255,0.25)'
             : isAgent && agentCfg
               ? `1px solid ${agentCfg.color}44`
-              : 'none',
-          fontSize: isAgent ? '14px' : undefined,
+              : '1px solid rgba(255,255,255,0.1)',
+          fontSize: '0.6rem', fontWeight: 800, letterSpacing: '0.04em',
         }}>
           {isUser
-            ? <User size={14} style={{ color: '#A78BFA' }} />
+            ? <User size={14} style={{ color: '#33BAFF' }} />
             : isAgent && agentCfg
-              ? agentCfg.emoji
+              ? <span style={{ color: agentCfg.color, fontSize: '0.6rem', fontWeight: 900 }}>{agentCfg.initials}</span>
               : <Bot size={14} color="white" />
           }
         </div>
@@ -365,11 +365,12 @@ export default function ChatPage() {
                 <div key={i} style={{
                   fontSize: '0.72rem', padding: '0.25rem 0.55rem',
                   borderRadius: 6, display: 'inline-flex', alignItems: 'center', gap: 5,
-                  background: chip.type === 'action' ? 'rgba(34,211,238,0.08)' : 'rgba(255,255,255,0.04)',
-                  border: `1px solid ${chip.type === 'action' ? 'rgba(34,211,238,0.2)' : 'rgba(255,255,255,0.07)'}`,
-                  color: chip.type === 'action' ? '#22D3EE' : 'rgba(255,255,255,0.4)',
+                  background: chip.type === 'action' ? 'rgba(0,163,255,0.08)' : 'rgba(255,255,255,0.03)',
+                  border: `1px solid ${chip.type === 'action' ? 'rgba(0,163,255,0.2)' : 'rgba(255,255,255,0.06)'}`,
+                  color: chip.type === 'action' ? '#33BAFF' : '#475569',
+                  fontFamily: chip.type === 'action' ? 'JetBrains Mono, monospace' : 'inherit',
                 }}>
-                  {chip.type === 'action' ? '⚙️' : '💭'} {chip.content}
+                  {chip.content}
                 </div>
               ))}
             </div>
@@ -380,10 +381,10 @@ export default function ChatPage() {
             <div key={bubble.id}>
               {isUser ? (
                 <div style={{
-                  padding: '0.75rem 1rem', borderRadius: 14,
-                  background: 'linear-gradient(135deg, rgba(124,58,237,0.35), rgba(79,70,229,0.28))',
-                  border: '1px solid rgba(124,58,237,0.3)',
-                  color: '#fff', fontSize: '0.9rem', lineHeight: 1.65, whiteSpace: 'pre-wrap',
+                  padding: '0.75rem 1.125rem', borderRadius: 14,
+                  background: 'linear-gradient(135deg, rgba(0,163,255,0.2), rgba(0,97,153,0.15))',
+                  border: '1px solid rgba(0,163,255,0.25)',
+                  color: '#F8FAFC', fontSize: '0.9rem', lineHeight: 1.65, whiteSpace: 'pre-wrap',
                 }}>
                   {bubble.content}
                 </div>
@@ -450,16 +451,17 @@ export default function ChatPage() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <div style={{
               width: 36, height: 36, borderRadius: 10,
-              background: 'linear-gradient(135deg, #7C3AED, #4F46E5)',
+              background: 'linear-gradient(135deg, #00A3FF, #006199)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              boxShadow: '0 0 20px rgba(124,58,237,0.35)',
+              boxShadow: '0 0 20px rgba(0,163,255,0.4)',
+              border: '1px solid rgba(255,255,255,0.1)',
             }}>
               <Zap size={18} color="white" />
             </div>
             <div>
-              <div style={{ fontWeight: 700, fontSize: '1rem', color: '#fff' }}>ASMIA</div>
-              <div style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.35)' }}>
-                Autonomous Social Media Intelligence Agency
+              <div style={{ fontWeight: 800, fontSize: '0.95rem', background: 'linear-gradient(180deg, #FFFFFF 0%, #94BFDB 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', letterSpacing: '-0.02em' }}>Neural Link</div>
+              <div style={{ fontSize: '0.65rem', color: '#475569', fontWeight: 600, letterSpacing: '0.06em', marginTop: 1 }}>
+                DIGITAL FORCE COMMAND INTERFACE
               </div>
             </div>
           </div>
@@ -477,39 +479,39 @@ export default function ChatPage() {
             <div style={{ maxWidth: 620, margin: '3rem auto', textAlign: 'center' }}>
               <div style={{
                 width: 72, height: 72, borderRadius: 20,
-                background: 'rgba(124,58,237,0.1)', border: '1px solid rgba(124,58,237,0.2)',
+                background: 'rgba(0,163,255,0.08)', border: '1px solid rgba(0,163,255,0.2)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 margin: '0 auto 1.5rem',
+                boxShadow: '0 0 40px rgba(0,163,255,0.15)',
               }}>
-                <MessageSquare size={32} style={{ color: '#A78BFA' }} />
+                <MessageSquare size={32} style={{ color: '#33BAFF' }} />
               </div>
-              <h2 style={{ fontSize: '1.3rem', fontWeight: 700, color: '#fff', marginBottom: 8 }}>
-                Talk to your agency
+              <h2 style={{ fontSize: '1.3rem', fontWeight: 800, color: '#F8FAFC', marginBottom: 8, letterSpacing: '-0.02em' }}>
+                Initialize Communication
               </h2>
-              <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.9rem', marginBottom: '2rem', lineHeight: 1.6 }}>
-                Brief ASMIA in plain English. The agents take it from there — planning, creating,
-                publishing, and reporting back here automatically.
+              <p style={{ color: '#64748B', fontSize: '0.9rem', marginBottom: '2rem', lineHeight: 1.7, maxWidth: 480, margin: '0 auto 2rem' }}>
+                Brief your autonomous agents in plain language. They synthesize a strategy, execute operations across platforms, and report outcomes in real time.
               </p>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: '2rem', width: '100%', maxWidth: 560 }}>
                 {SUGGESTED_PROMPTS.map((p, i) => (
                   <button key={i} id={`prompt-${i}`} onClick={() => sendMessage(p)}
                     style={{
-                      padding: '0.75rem 1rem', borderRadius: 12, textAlign: 'left',
-                      background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)',
-                      color: 'rgba(255,255,255,0.6)', fontSize: '0.875rem', cursor: 'pointer',
-                      transition: 'all 0.2s',
+                      padding: '0.75rem 1.125rem', borderRadius: 10, textAlign: 'left',
+                      background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)',
+                      color: '#64748B', fontSize: '0.85rem', cursor: 'pointer',
+                      transition: 'all 0.2s', fontWeight: 500,
                     }}
                     onMouseEnter={e => {
-                      e.currentTarget.style.background = 'rgba(124,58,237,0.12)'
-                      e.currentTarget.style.borderColor = 'rgba(124,58,237,0.3)'
-                      e.currentTarget.style.color = '#fff'
+                      e.currentTarget.style.background = 'rgba(0,163,255,0.08)'
+                      e.currentTarget.style.borderColor = 'rgba(0,163,255,0.25)'
+                      e.currentTarget.style.color = '#E2E8F0'
                     }}
                     onMouseLeave={e => {
-                      e.currentTarget.style.background = 'rgba(255,255,255,0.04)'
-                      e.currentTarget.style.borderColor = 'rgba(255,255,255,0.07)'
-                      e.currentTarget.style.color = 'rgba(255,255,255,0.6)'
+                      e.currentTarget.style.background = 'rgba(255,255,255,0.03)'
+                      e.currentTarget.style.borderColor = 'rgba(255,255,255,0.05)'
+                      e.currentTarget.style.color = '#64748B'
                     }}>
-                    "{p}"
+                    {p}
                   </button>
                 ))}
               </div>
@@ -530,20 +532,14 @@ export default function ChatPage() {
           }}>
             <div style={{
               display: 'inline-flex', alignItems: 'center', gap: 10,
-              background: 'rgba(34, 211, 238, 0.1)', border: '1px solid rgba(34, 211, 238, 0.2)',
-              borderRadius: 20, padding: '4px 16px', fontSize: '0.75rem', color: '#22D3EE',
-              animation: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-              boxShadow: '0 0 10px rgba(34, 211, 238, 0.2)'
+              background: 'rgba(0,163,255,0.08)', border: '1px solid rgba(0,163,255,0.2)',
+              borderRadius: 20, padding: '5px 18px', fontSize: '0.72rem', color: '#33BAFF',
+              fontWeight: 700, letterSpacing: '0.06em',
+              boxShadow: '0 0 20px rgba(0,163,255,0.15)'
             }}>
-              <span className="thinking-dot" style={{ width: 6, height: 6, background: '#22D3EE' }} />
-              agents working...
+              <span className="thinking-dot" style={{ width: 6, height: 6, background: '#00A3FF' }} />
+              NEURAL AGENTS ACTIVE
             </div>
-            <style jsx>{`
-              @keyframes pulse {
-                0%, 100% { opacity: 1; border-color: rgba(34, 211, 238, 0.4); }
-                50% { opacity: 0.6; border-color: rgba(34, 211, 238, 0.1); }
-              }
-            `}</style>
           </div>
         )}
 
@@ -557,10 +553,12 @@ export default function ChatPage() {
           <div style={{ maxWidth: 820, margin: '0 auto' }}>
             <div style={{
               display: 'flex', gap: 10, alignItems: 'flex-end',
-              background: 'rgba(255,255,255,0.05)',
-              border: `1px solid ${loading ? 'rgba(124,58,237,0.35)' : 'rgba(255,255,255,0.1)'}`,
+              background: 'rgba(15,23,42,0.6)',
+              border: `1px solid ${loading ? 'rgba(0,163,255,0.4)' : 'rgba(255,255,255,0.06)'}`,
               borderRadius: 16, padding: '0.5rem 0.5rem 0.5rem 1rem',
-              transition: 'border-color 0.2s',
+              backdropFilter: 'blur(12px)',
+              transition: 'border-color 0.2s, box-shadow 0.2s',
+              boxShadow: loading ? '0 0 20px rgba(0,163,255,0.1)' : 'none',
             }}>
               <textarea
                 ref={textareaRef}
@@ -568,7 +566,7 @@ export default function ChatPage() {
                 value={input}
                 onChange={e => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder={loading ? 'ASMIA is responding...' : 'Brief the agency... (Enter to send)'}
+                placeholder={loading ? 'Processing directive...' : 'Initialize a directive... (Enter to transmit)'}
                 disabled={loading}
                 rows={1}
                 style={{
@@ -590,19 +588,19 @@ export default function ChatPage() {
                 style={{
                   width: 40, height: 40, borderRadius: 12, flexShrink: 0,
                   background: input.trim() && !loading
-                    ? 'linear-gradient(135deg, #7C3AED, #4F46E5)'
-                    : 'rgba(255,255,255,0.06)',
-                  border: 'none',
+                    ? 'linear-gradient(135deg, #00A3FF, #006199)'
+                    : 'rgba(255,255,255,0.04)',
+                  border: input.trim() && !loading ? '1px solid rgba(255,255,255,0.15)' : '1px solid rgba(255,255,255,0.04)',
                   cursor: input.trim() && !loading ? 'pointer' : 'not-allowed',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   transition: 'all 0.2s',
-                  boxShadow: input.trim() && !loading ? '0 0 20px rgba(124,58,237,0.35)' : 'none',
+                  boxShadow: input.trim() && !loading ? '0 0 20px rgba(0,163,255,0.45)' : 'none',
                 }}>
-                <Send size={16} color={input.trim() && !loading ? 'white' : 'rgba(255,255,255,0.3)'} />
+                <Send size={16} color={input.trim() && !loading ? 'white' : '#334155'} />
               </button>
             </div>
-            <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.2)', textAlign: 'center', marginTop: 8 }}>
-              ASMIA agents work autonomously — updates appear here in real time
+            <div style={{ fontSize: '0.68rem', color: '#334155', textAlign: 'center', marginTop: 8, fontWeight: 600, letterSpacing: '0.04em' }}>
+              DIGITAL FORCE — NEURAL AGENTS EXECUTE AUTONOMOUSLY
             </div>
           </div>
         </div>

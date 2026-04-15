@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-const PUBLIC_PATHS = ['/login', '/api', '/_next', '/favicon.ico']
+const PUBLIC_PATHS = ['/login', '/landing', '/api', '/_next', '/favicon.ico']
 
 /**
  * Next.js Edge Middleware — MUST be named `middleware` to be executed.

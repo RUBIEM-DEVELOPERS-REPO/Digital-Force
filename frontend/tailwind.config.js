@@ -8,33 +8,33 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        // Brand palette
+        // Brand palette - Electric Sapphire
         primary: {
-          DEFAULT: '#7C3AED',
-          50: '#F5F3FF',
-          100: '#EDE9FE',
-          400: '#A78BFA',
-          500: '#8B5CF6',
-          600: '#7C3AED',
-          700: '#6D28D9',
-          900: '#4C1D95',
+          DEFAULT: '#00A3FF',
+          50: '#E6F6FF',
+          100: '#CCEDFF',
+          400: '#33BAFF',
+          500: '#00A3FF',
+          600: '#0082CC',
+          700: '#006199',
+          900: '#004166',
         },
         accent: {
-          DEFAULT: '#06B6D4',
-          400: '#22D3EE',
-          500: '#06B6D4',
+          DEFAULT: '#22D3EE',
+          400: '#67E8F9',
+          500: '#22D3EE',
         },
         success: '#10B981',
         warning: '#F59E0B',
         danger: '#EF4444',
-        // Dark surface palette
+        // Dark surface palette - Obsidian
         surface: {
-          DEFAULT: '#0F0F1A',
-          50: '#1A1A2E',
-          100: '#16213E',
-          200: '#1F1F35',
-          300: '#252540',
-          400: '#2D2D50',
+          DEFAULT: '#080B12',
+          50: '#0F172A',
+          100: '#151D31',
+          200: '#1E293B',
+          300: '#334155',
+          400: '#475569',
         },
       },
       fontFamily: {
@@ -43,9 +43,9 @@ module.exports = {
       },
       backgroundImage: {
         'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
-        'gradient-agent': 'linear-gradient(135deg, #7C3AED 0%, #06B6D4 100%)',
-        'gradient-dark': 'linear-gradient(135deg, #0F0F1A 0%, #1A1A2E 100%)',
-        'glass': 'linear-gradient(135deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.02) 100%)',
+        'gradient-agent': 'linear-gradient(135deg, #00A3FF 0%, #22D3EE 100%)',
+        'gradient-dark': 'linear-gradient(135deg, #080B12 0%, #0F172A 100%)',
+        'glass': 'linear-gradient(135deg, rgba(15,23,42,0.6) 0%, rgba(15,23,42,0.2) 100%)',
       },
       animation: {
         'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
@@ -64,8 +64,8 @@ module.exports = {
           '100%': { opacity: '1' },
         },
         glow: {
-          '0%': { boxShadow: '0 0 20px rgba(124, 58, 237, 0.3)' },
-          '100%': { boxShadow: '0 0 40px rgba(124, 58, 237, 0.6)' },
+          '0%': { boxShadow: '0 0 20px rgba(0, 163, 255, 0.3)' },
+          '100%': { boxShadow: '0 0 40px rgba(0, 163, 255, 0.6)' },
         },
         thinking: {
           '0%, 100%': { opacity: '0.4' },

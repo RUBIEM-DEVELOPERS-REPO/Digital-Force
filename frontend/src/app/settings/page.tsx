@@ -225,27 +225,30 @@ export default function SettingsPage() {
       <Sidebar />
       <main style={{ flex: 1, padding: '2rem', overflowY: 'auto', maxWidth: 900, margin: '0 auto', width: '100%' }}>
         {/* Header */}
-        <div className="animate-slide-up" style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <div>
-            <h1 style={{ fontSize: '1.75rem', fontWeight: 700, color: '#fff' }}>Settings</h1>
-            <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.875rem', marginTop: 4 }}>
-              Configure your Digital Force agency
-            </p>
+        <div style={{ padding: '3rem 0 2rem', borderBottom: '1px solid rgba(255,255,255,0.03)', marginBottom: '2rem' }}>
+          <div style={{ fontSize: '0.72rem', color: '#334155', fontWeight: 700, letterSpacing: '0.1em', marginBottom: '0.75rem' }}>DIGITAL FORCE — CONFIGURATION</div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+            <div>
+              <h1 style={{ fontSize: '2.5rem', fontWeight: 900, letterSpacing: '-0.035em', background: 'linear-gradient(180deg, #FFFFFF 0%, #94A3B8 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', lineHeight: 1.1, marginBottom: '0.625rem' }}>Settings</h1>
+              <p style={{ fontSize: '0.875rem', color: '#475569' }}>Configure your Digital Force agency and integrations</p>
+            </div>
+            <div>
+              {activeTab !== 'danger' && activeTab !== 'autonomous' && (
+                <button onClick={handleSave} disabled={saving} className="btn-primary" id="save-settings">
+                  {saving ? <RefreshCw size={15} className="animate-spin" /> :
+                   saved ? <CheckCircle2 size={15} /> : <Save size={15} />}
+                  {saving ? 'Saving...' : saved ? 'Saved!' : 'Save Changes'}
+                </button>
+              )}
+              {activeTab === 'autonomous' && (
+                <button onClick={handleSaveAutonomous} disabled={autonomousSaving} className="btn-primary" id="save-autonomous">
+                  {autonomousSaving ? <RefreshCw size={15} className="animate-spin" /> :
+                   autonomousSaved ? <CheckCircle2 size={15} /> : <Save size={15} />}
+                  {autonomousSaving ? 'Saving...' : autonomousSaved ? 'Saved!' : 'Save Autonomous Settings'}
+                </button>
+              )}
+            </div>
           </div>
-          {activeTab !== 'danger' && activeTab !== 'autonomous' && (
-            <button onClick={handleSave} disabled={saving} className="btn-primary" id="save-settings">
-              {saving ? <RefreshCw size={15} className="animate-spin" /> :
-               saved ? <CheckCircle2 size={15} /> : <Save size={15} />}
-              {saving ? 'Saving...' : saved ? 'Saved!' : 'Save Changes'}
-            </button>
-          )}
-          {activeTab === 'autonomous' && (
-            <button onClick={handleSaveAutonomous} disabled={autonomousSaving} className="btn-primary" id="save-autonomous">
-              {autonomousSaving ? <RefreshCw size={15} className="animate-spin" /> :
-               autonomousSaved ? <CheckCircle2 size={15} /> : <Save size={15} />}
-              {autonomousSaving ? 'Saving...' : autonomousSaved ? 'Saved!' : 'Save Autonomous Settings'}
-            </button>
-          )}
         </div>
 
         {error && (
@@ -260,25 +263,26 @@ export default function SettingsPage() {
         )}
 
         {/* Tabs */}
-        <div style={{ display: 'flex', gap: 4, marginBottom: '1.5rem', borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: '0.75rem', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 4, marginBottom: '1.5rem', borderBottom: '1px solid rgba(255,255,255,0.04)', paddingBottom: '0.75rem', flexWrap: 'wrap' }}>
           {TABS.map(tab => {
             const Icon = tab.icon
             return (
               <button key={tab.id} onClick={() => setActiveTab(tab.id)}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 7,
-                  padding: '0.5rem 1rem', borderRadius: 10, fontSize: '0.85rem',
-                  fontWeight: activeTab === tab.id ? 600 : 400, cursor: 'pointer',
+                  padding: '0.5rem 1rem', borderRadius: 10, fontSize: '0.82rem',
+                  fontWeight: activeTab === tab.id ? 700 : 500, cursor: 'pointer',
                   background: activeTab === tab.id
-                    ? tab.id === 'danger' ? 'rgba(239,68,68,0.1)' : tab.id === 'autonomous' ? 'rgba(34,211,238,0.1)' : 'rgba(124,58,237,0.15)'
+                    ? tab.id === 'danger' ? 'rgba(239,68,68,0.1)' : tab.id === 'autonomous' ? 'rgba(0,163,255,0.1)' : 'rgba(0,163,255,0.1)'
                     : 'transparent',
                   color: activeTab === tab.id
-                    ? tab.id === 'danger' ? '#FCA5A5' : tab.id === 'autonomous' ? '#22D3EE' : '#A78BFA'
-                    : tab.id === 'danger' ? 'rgba(239,68,68,0.5)' : 'rgba(255,255,255,0.45)',
+                    ? tab.id === 'danger' ? '#FCA5A5' : '#33BAFF'
+                    : tab.id === 'danger' ? 'rgba(239,68,68,0.5)' : '#64748B',
                   border: `1px solid ${activeTab === tab.id
-                    ? tab.id === 'danger' ? 'rgba(239,68,68,0.2)' : tab.id === 'autonomous' ? 'rgba(34,211,238,0.2)' : 'rgba(124,58,237,0.25)'
+                    ? tab.id === 'danger' ? 'rgba(239,68,68,0.2)' : 'rgba(0,163,255,0.25)'
                     : 'transparent'}`,
-                  transition: 'all 0.2s',
+                  transition: 'all 0.15s',
+                  letterSpacing: '0.02em',
                 }}>
                 <Icon size={14} />
                 {tab.label}
@@ -330,19 +334,19 @@ export default function SettingsPage() {
                 </div>
               ))}
             </div>
-            <Section title="🤖 AI Language Models (Groq Cascade)">
+            <Section title="AI Language Models — Groq Cascade">
               <Field id="groq_api_key_1" label="Groq API Key 1 (Primary)" value={form.groq_api_key_1 || ''} onChange={set('groq_api_key_1')} isSecret placeholder="gsk_..." hint="console.groq.com" />
               <Field id="groq_api_key_2" label="Groq API Key 2 (Fallback)" value={form.groq_api_key_2 || ''} onChange={set('groq_api_key_2')} isSecret placeholder="gsk_..." />
               <Field id="groq_api_key_3" label="Groq API Key 3 (Emergency)" value={form.groq_api_key_3 || ''} onChange={set('groq_api_key_3')} isSecret placeholder="gsk_..." />
             </Section>
-            <Section title="📱 Social Publishing">
+            <Section title="Social Publishing Integrations">
               <Field id="buffer_access_token" label="Buffer Access Token" value={form.buffer_access_token || ''} onChange={set('buffer_access_token')} isSecret placeholder="buffer_pub_..." hint="buffer.com/developers" />
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                 <Field id="facebook_page_id" label="Facebook Page ID" value={form.facebook_page_id || ''} onChange={set('facebook_page_id')} placeholder="123456789" />
                 <Field id="facebook_access_token" label="Facebook Access Token" value={form.facebook_access_token || ''} onChange={set('facebook_access_token')} isSecret placeholder="EAA..." />
               </div>
             </Section>
-            <Section title="🧠 Vector Database (Qdrant)">
+            <Section title="Vector Database — Qdrant">
               <Field id="qdrant_url" label="Qdrant Cloud URL" value={form.qdrant_url || ''} onChange={set('qdrant_url')} placeholder="https://xxx.qdrant.io" hint="Leave empty to use local storage" />
               <Field id="qdrant_api_key" label="Qdrant API Key" value={form.qdrant_api_key || ''} onChange={set('qdrant_api_key')} isSecret placeholder="your-qdrant-api-key" />
             </Section>
@@ -561,7 +565,7 @@ export default function SettingsPage() {
         {/* ── Notifications ── */}
         {activeTab === 'notifications' && (
           <div>
-            <Section title="📧 SMTP Email (for approval notifications)">
+            <Section title="Email Notifications — SMTP">
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                 <Field id="smtp_host" label="SMTP Host" value={form.smtp_host || ''} onChange={set('smtp_host')} placeholder="smtp.gmail.com" />
                 <Field id="smtp_port" label="SMTP Port" type="number" value={form.smtp_port || '587'} onChange={set('smtp_port')} />
@@ -575,7 +579,7 @@ export default function SettingsPage() {
                 <Field id="smtp_from_email" label="From Email" value={form.smtp_from_email || ''} onChange={set('smtp_from_email')} placeholder="noreply@yourdomain.com" />
               </div>
               <div style={{ fontSize: '0.78rem', color: 'rgba(255,255,255,0.3)', padding: '0.75rem', background: 'rgba(255,255,255,0.03)', borderRadius: 8 }}>
-                💡 For Gmail: Enable 2FA → Generate an App Password at myaccount.google.com/apppasswords
+                For Gmail: Enable 2FA, then generate an App Password at myaccount.google.com/apppasswords
               </div>
             </Section>
           </div>
