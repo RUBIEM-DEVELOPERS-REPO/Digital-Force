@@ -28,42 +28,102 @@ SKILL_SYSTEM_PROMPT = """You are SkillForge — an expert Python developer creat
 
 Rules for generated skills:
 1. Write a single async Python function
-2. Include all imports at the top of the function body
+2. Include ALL imports inside the function body
 3. Handle all exceptions and return sensible defaults
 4. Add a docstring explaining what the function does
 5. The function must be fully self-contained (no external state)
 6. Return a dict with a "success" key always
 
-Example skill structure:
+═══ STRATEGY FOR CHOOSING IMPLEMENTATION APPROACH ═══
+
+Option A — API first (preferred):
+If a public REST/GraphQL API exists for the task, use it with httpx.
+
+Option B — Headless browser (fallback when no API exists):
+If no API exists or the API is paywalled/blocked, use Playwright to control a
+real Chromium browser. This is available in the E2B sandbox.
+
+Playwright skill example:
 ```python
-async def check_hashtag_trend(hashtag: str, platform: str) -> dict:
-    \"\"\"Check if a hashtag is currently trending on the given platform.\"\"\"
-    import httpx
+async def scrape_linkedin_profile(username: str) -> dict:
+    \"\"\"Scrape a LinkedIn public profile using a headless browser.\"\"\"
+    from playwright.async_api import async_playwright
     try:
-        # implementation
-        return {"success": True, "is_trending": True, "rank": 5}
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(headless=True)
+            context = await browser.new_context(
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+            )
+            page = await context.new_page()
+            await page.goto(f"https://www.linkedin.com/in/{username}/", wait_until="networkidle")
+            name = await page.text_content("h1.top-card-layout__title") or "Unknown"
+            headline = await page.text_content("h2.top-card-layout__headline") or ""
+            await browser.close()
+            return {"success": True, "name": name.strip(), "headline": headline.strip()}
     except Exception as e:
         return {"success": False, "error": str(e)}
 ```
+
+API skill example:
+```python
+async def check_hashtag_trend(hashtag: str, platform: str) -> dict:
+    \"\"\"Check if a hashtag is trending.\"\"\"
+    import httpx
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get(f"https://api.example.com/trends/{hashtag}")
+            data = resp.json()
+        return {"success": True, "is_trending": data.get("trending", False)}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+```
+
+When using Playwright:
+- Always set `headless=True`
+- Set a realistic `user_agent` to avoid bot detection
+- Use `wait_until="networkidle"` or specific selectors with `wait_for_selector`
+- Always call `await browser.close()` before returning
+- Use `page.screenshot(path="/tmp/debug.png")` if you need to debug page state
 
 Write clean, production-ready Python. No placeholder code."""
 
 
 # ─── E2B Sandbox ─────────────────────────────────────────────────────────────
 
+def _is_playwright_skill(code: str) -> bool:
+    """Detect if the generated skill uses Playwright."""
+    return "playwright" in code.lower() or "async_playwright" in code
+
+
 async def _run_in_e2b(code: str, function_name: str, test_args: dict) -> dict:
-    """Execute generated code in E2B sandbox."""
+    """
+    Execute generated code in E2B cloud sandbox.
+    Auto-detects Playwright usage and installs Chromium in the sandbox if needed.
+    The sandbox is remote and isolated — nothing touches the local machine.
+    """
     if not settings.e2b_api_key:
         logger.warning("[SkillForge] E2B not configured. Running in restricted local mode.")
         return await _run_local_test(code, function_name, test_args)
 
+    uses_playwright = _is_playwright_skill(code)
+
     try:
         from e2b_code_interpreter import Sandbox
         async with Sandbox(api_key=settings.e2b_api_key) as sbx:
+            # ── Base dependency install ──────────────────────────────────────
             await sbx.commands.run("pip install httpx requests beautifulsoup4 -q")
 
-            test_code = f"""
-import asyncio
+            # ── Playwright: install + download Chromium inside the sandbox ───
+            if uses_playwright:
+                logger.info("[SkillForge] Playwright skill detected — installing Chromium in E2B sandbox...")
+                # This runs INSIDE the cloud sandbox — zero local disk usage
+                install_result = await sbx.commands.run(
+                    "pip install playwright -q && playwright install chromium --with-deps -q"
+                )
+                logger.info(f"[SkillForge] Playwright sandbox ready: {install_result.stdout[-200:] if hasattr(install_result, 'stdout') else 'ok'}")
+
+            # ── Build the test runner ────────────────────────────────────────
+            test_code = f"""import asyncio
 {code}
 
 async def _test():
@@ -75,8 +135,9 @@ asyncio.run(_test())
 """
             result = await sbx.run_code(test_code)
             output = result.text or ""
-            success = "RESULT:" in output and "error" not in output.lower()
-            return {"success": success, "output": output, "sandbox": "e2b"}
+            success = "RESULT:" in output and "'success': False" not in output and "error" not in output.lower()
+            sandbox_type = "e2b_playwright" if uses_playwright else "e2b_standard"
+            return {"success": success, "output": output, "sandbox": sandbox_type}
     except Exception as e:
         logger.error(f"[SkillForge] E2B execution failed: {e}")
         return {"success": False, "error": str(e)}
@@ -163,17 +224,25 @@ The following error occurred in a social media AI agent:
 Web research found this potential solution:
 {web_solution[:1000]}
 
+IMPORTANT: A headless browser (Playwright with Chromium) IS available in the execution sandbox.
+If the best solution can be achieved by controlling a browser (scraping, clicking, filling forms),
+that counts as a valid solution WITHOUT needing a new API key.
+
 Does the BEST solution require a new API key or external service that might not be configured yet?
 Respond with JSON only:
 {{
   "needs_new_api": true or false,
-  "api_name": "Name of the API/service (e.g. 'Mastodon API', 'Twilio', 'OpenAI DALL-E')",
-  "signup_url": "https://...",
+  "api_name": "Name of the API/service, or null if can use browser/other approach",
+  "signup_url": "https://..., or null",
   "is_free": true or false,
-  "why_needed": "1-2 sentence plain-English explanation of why this API is the best solution",
+  "why_needed": "1-2 sentence explanation",
   "can_proceed_without": true or false,
-  "alternative_approach": "Brief description of a lower-capability alternative that doesn't need the API, or null"
+  "use_playwright": true or false,
+  "alternative_approach": "Description of headless browser approach or other fallback if it exists, else null"
 }}
+
+Set use_playwright=true if a headless Playwright browser can solve this without needing a new API key.
+Set can_proceed_without=true if either a browser approach OR another library can solve this.
 """
     try:
         api_check = await generate_json(api_check_prompt)
@@ -262,6 +331,12 @@ Risk level:
     logger.info(f"[SkillForge] Forging: {skill_name} (Risk: {risk_level})")
 
     # ── Step 4: Generate the skill code (with web solution as context) ────────
+    use_playwright = api_check.get("use_playwright", False)
+    playwright_hint = (
+        "\n\nIMPORTANT: Use Playwright (headless Chromium browser) for this skill — no API is available. "
+        "The sandbox has Playwright installed. Use `from playwright.async_api import async_playwright` inside the function."
+    ) if use_playwright else ""
+
     code_prompt = f"""
 Create a Python async function called '{skill_name}' that:
 {skill_spec.get('description')}
@@ -272,8 +347,8 @@ Use this research as guidance for implementation:
 {web_solution[:800]}
 
 Context: This is for a social media AI agent managing content across LinkedIn, Facebook, TikTok, Instagram, X, YouTube.
-The function must be fully self-contained. Include all imports inside the function body.
-Return a dict with a "success" key always.
+The function must be fully self-contained. Include ALL imports inside the function body.
+Return a dict with a "success" key always.{playwright_hint}
 """
 
     raw_code = await generate_completion(code_prompt, SKILL_SYSTEM_PROMPT)
