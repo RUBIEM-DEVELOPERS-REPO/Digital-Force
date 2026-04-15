@@ -99,21 +99,48 @@ async def stream_chat_response(
     max_tokens: int = 1024,
 ) -> AsyncGenerator[str, None]:
     """
-    Stream tokens safely for the human chat interface using the cascade logic.
+    Legacy single-turn stream (kept for compatibility). Prefer stream_chat_with_history.
+    """
+    async for token in stream_chat_with_history(
+        system=system,
+        messages=[{"role": "user", "content": user}],
+        temperature=temperature,
+        max_tokens=max_tokens,
+    ):
+        yield token
+
+
+async def stream_chat_with_history(
+    system: str,
+    messages: list,
+    temperature: float = 0.7,
+    max_tokens: int = 1500,
+) -> AsyncGenerator[str, None]:
+    """
+    Memory-aware chat streaming. Passes the FULL conversation history to Groq
+    as a proper multi-turn messages[] array so the model has context.
+
+    messages format: [{"role": "user"|"assistant"|"agent", "content": "..."}]
+    "agent" roles are remapped to "assistant" for the Groq API.
     """
     from groq import AsyncGroq
     configs = _get_cascade_configs()
     last_error = None
-    
+
+    # Normalise roles: Groq only accepts "user" | "assistant" | "system"
+    groq_messages = [{"role": "system", "content": system}]
+    for m in messages:
+        role = m.get("role", "user")
+        if role not in ("user", "assistant"):
+            role = "assistant"  # agent messages appear as assistant context
+        groq_messages.append({"role": role, "content": m.get("content", "")})
+
     for attempt, (api_key, model) in enumerate(configs, 1):
         try:
             client = AsyncGroq(api_key=api_key, max_retries=0)
             stream = await client.chat.completions.create(
                 model=model,
-                messages=[
-                    {"role": "system", "content": system},
-                    {"role": "user", "content": user},
-                ],
+                messages=groq_messages,
                 stream=True,
                 temperature=temperature,
                 max_tokens=max_tokens,
@@ -123,15 +150,17 @@ async def stream_chat_response(
                 if delta:
                     yield delta
             return
-            
+
         except Exception as e:
             last_error = e
-            logger.warning(f"[LLM Stream Cascade] Attempt {attempt}/{len(configs)} failed: {e}")
-            
-    logger.error("[LLM Stream Cascade] All Groq API connections failed. Attempting final non-streaming fallback.")
-    
-    # If all Async streams immediately refuse connection, try one last static completion natively
-    full = await generate_completion(user, system, temperature=temperature)
+            logger.warning(f"[LLM Stream History Cascade] Attempt {attempt}/{len(configs)} failed: {e}")
+
+    logger.error("[LLM Stream History] All Groq API connections failed. Falling back to non-streaming.")
+    full = await generate_completion(
+        prompt=messages[-1].get("content", "") if messages else "",
+        system_prompt=system,
+        temperature=temperature,
+    )
     for word in full.split(" "):
         yield word + " "
 

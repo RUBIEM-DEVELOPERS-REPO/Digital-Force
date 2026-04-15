@@ -8,6 +8,7 @@ import logging
 import httpx
 from datetime import datetime
 from agent.state import AgentState
+from agent.chat_push import chat_push
 from config import get_settings
 
 logger = logging.getLogger(__name__)
@@ -116,7 +117,9 @@ async def publisher_node(state: AgentState) -> dict:
     Takes approved tasks marked as 'post_content', resolves content + assets,
     and publishes to the appropriate platform.
     """
-    logger.info(f"[Publisher] Processing publish tasks for goal {state['goal_id']}")
+    goal_id = state['goal_id']
+    user_id = state.get('created_by', '')
+    logger.info(f"[Publisher] Processing publish tasks for goal {goal_id}")
 
     tasks = state.get("tasks", [])
     completed = set(state.get("completed_task_ids", []))
@@ -132,6 +135,13 @@ async def publisher_node(state: AgentState) -> dict:
             "next_agent": "monitor",
             "messages": [{"role": "publisher", "content": "No pending publish tasks."}]
         }
+
+    await chat_push(
+        user_id=user_id,
+        content=f"📤 Publishing {len(publish_tasks)} post(s) to your platforms...",
+        agent_name="publisher",
+        goal_id=goal_id,
+    )
 
     buffer_profiles = await _get_buffer_profiles()
     newly_completed = []
@@ -164,9 +174,23 @@ async def publisher_node(state: AgentState) -> dict:
 
             if result["success"]:
                 newly_completed.append(task.get("id", ""))
+                sim_note = " (simulated — connect platforms in Settings)" if result.get("simulation") else ""
+                await chat_push(
+                    user_id=user_id,
+                    content=f"✅ Published to **{platform.capitalize()}**{sim_note}: \"{caption[:60]}...\"",
+                    agent_name="publisher",
+                    goal_id=goal_id,
+                    metadata={"platform": platform, "post_id": result.get("platform_post_id")},
+                )
                 messages.append({"role": "publisher", "content": f"✅ Posted to {platform}: {caption[:50]}..."})
             else:
                 newly_failed.append(task.get("id", ""))
+                await chat_push(
+                    user_id=user_id,
+                    content=f"❌ Failed to publish to **{platform.capitalize()}**: {result.get('error', 'Unknown error')}",
+                    agent_name="publisher",
+                    goal_id=goal_id,
+                )
                 messages.append({"role": "publisher", "content": f"❌ Failed {platform}: {result.get('error')}"})
 
         except Exception as e:

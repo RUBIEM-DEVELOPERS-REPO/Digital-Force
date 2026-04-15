@@ -1,40 +1,42 @@
 """
 Digital Force — Chat API
-Natural language SSE-streaming interface to the ASMIA agency.
+SSE-streaming interface to the ASMIA agency with persistent memory and agent push polling.
 """
 
 import json
 import asyncio
 import logging
-from fastapi import APIRouter, Depends, Request
+from datetime import datetime
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc
 
-from database import get_db, AgentLog
+from database import get_db, ChatMessage
 from auth import get_current_user
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 
 
-class ChatMessage(BaseModel):
+class ChatMessageBody(BaseModel):
     message: str
     context: Optional[dict] = {}
 
 
 @router.post("/stream")
 async def chat_stream(
-    body: ChatMessage,
+    body: ChatMessageBody,
     db: AsyncSession = Depends(get_db),
     user: dict = Depends(get_current_user),
 ):
     """
     Stream a natural language conversation with the Digital Force agency.
     Returns SSE with typed chunks:
-      { type: "thinking" | "action" | "message" | "error" | "done", content: str }
+      { type: "thinking" | "action" | "bubble_start" | "message" | "bubble_end" | "error" | "done",
+        content: str, bubble_id?: str }
     """
 
     async def generate():
@@ -72,27 +74,73 @@ async def get_chat_history(
     limit: int = 100,
 ):
     """
-    Return recent chat messages.
-    User messages: level='user', assistant responses: level='info', agent='chat'
+    Return recent chat messages for the current user.
+    Includes user, assistant, and agent-pushed messages.
     """
+    user_id = user.get("sub", "unknown")
     result = await db.execute(
-        select(AgentLog)
-        .where(AgentLog.agent == "chat")
-        .order_by(AgentLog.created_at.asc())
+        select(ChatMessage)
+        .where(ChatMessage.user_id == user_id)
+        .order_by(ChatMessage.created_at.asc())
         .limit(limit)
     )
-    logs = result.scalars().all()
+    messages = result.scalars().all()
 
-    messages = []
-    for log in logs:
-        messages.append({
-            "id": log.id,
-            "role": "user" if log.level == "user" else "assistant",
-            "content": log.thought or "",
-            "created_at": log.created_at.isoformat(),
-        })
+    return [
+        {
+            "id": m.id,
+            "role": m.role,
+            "content": m.content,
+            "agent_name": m.agent_name,
+            "goal_id": m.goal_id,
+            "created_at": m.created_at.isoformat(),
+        }
+        for m in messages
+    ]
 
-    return messages
+
+@router.get("/updates")
+async def get_chat_updates(
+    db: AsyncSession = Depends(get_db),
+    user: dict = Depends(get_current_user),
+    since: Optional[str] = Query(None, description="ISO timestamp — return messages created after this"),
+):
+    """
+    Polling endpoint for agent-pushed messages since a given timestamp.
+    Frontend calls this every 10s to pick up autonomous agent updates.
+    """
+    user_id = user.get("sub", "unknown")
+
+    query = (
+        select(ChatMessage)
+        .where(ChatMessage.user_id == user_id)
+        .where(ChatMessage.role == "agent")
+        .order_by(ChatMessage.created_at.asc())
+    )
+
+    if since:
+        try:
+            since_dt = datetime.fromisoformat(since.replace("Z", "+00:00"))
+            # Use naive UTC comparison — strip tzinfo to match DB datetime
+            since_naive = since_dt.replace(tzinfo=None)
+            query = query.where(ChatMessage.created_at > since_naive)
+        except ValueError:
+            pass  # Bad timestamp — return all agent messages
+
+    result = await db.execute(query)
+    messages = result.scalars().all()
+
+    return [
+        {
+            "id": m.id,
+            "role": m.role,
+            "content": m.content,
+            "agent_name": m.agent_name,
+            "goal_id": m.goal_id,
+            "created_at": m.created_at.isoformat(),
+        }
+        for m in messages
+    ]
 
 
 @router.delete("/history")
@@ -100,8 +148,11 @@ async def clear_chat_history(
     db: AsyncSession = Depends(get_db),
     user: dict = Depends(get_current_user),
 ):
-    """Clear all chat history for a fresh start."""
+    """Clear all chat history for the current user."""
     from sqlalchemy import delete
-    await db.execute(delete(AgentLog).where(AgentLog.agent == "chat"))
+    user_id = user.get("sub", "unknown")
+    await db.execute(
+        delete(ChatMessage).where(ChatMessage.user_id == user_id)
+    )
     await db.commit()
     return {"status": "cleared", "message": "Chat history cleared."}

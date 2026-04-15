@@ -12,6 +12,7 @@ class AgentState(TypedDict):
     # ── Identity ────────────────────────────────────────
     goal_id: str
     goal_description: str
+    created_by: str           # User ID — so agents can push to chat
     platforms: list[str]
     deadline: Optional[str]
     success_metrics: dict

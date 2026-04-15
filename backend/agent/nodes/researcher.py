@@ -7,6 +7,7 @@ import logging
 import httpx
 from agent.state import AgentState
 from agent.llm import generate_json
+from agent.chat_push import chat_push
 from config import get_settings
 
 logger = logging.getLogger(__name__)
@@ -39,10 +40,19 @@ async def researcher_node(state: AgentState) -> dict:
     Conducts web research to inform the campaign strategy.
     Searches for: trending topics, competitor content, audience insights.
     """
-    logger.info(f"[Researcher] Starting research for goal {state['goal_id']}")
+    goal_id = state['goal_id']
+    user_id = state.get('created_by', '')
+    goal    = state["goal_description"]
+    logger.info(f"[Researcher] Starting research for goal {goal_id}")
+
+    await chat_push(
+        user_id=user_id,
+        content="🔍 Researching trends, competitors, and audience insights for your campaign...",
+        agent_name="researcher",
+        goal_id=goal_id,
+    )
 
     platforms = state.get("platforms", [])
-    goal = state["goal_description"]
 
     # Build targeted search queries
     queries = [
@@ -115,6 +125,20 @@ Return JSON:
             findings = {}
 
     logger.info(f"[Researcher] Research complete. Found {len(findings.get('trending_topics', []))} trends.")
+
+    topics   = findings.get('trending_topics', [])
+    angles   = findings.get('content_angles', [])
+    await chat_push(
+        user_id=user_id,
+        content=(
+            f"🔍 Research complete. "
+            f"Found {len(topics)} trending topics and {len(angles)} content angles. "
+            f"{'Top trend: ' + topics[0] + '. ' if topics else ''}"
+            f"Passing findings to Strategist..."
+        ),
+        agent_name="researcher",
+        goal_id=goal_id,
+    )
 
     return {
         "research_findings": findings,

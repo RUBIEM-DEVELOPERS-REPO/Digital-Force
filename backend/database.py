@@ -360,6 +360,34 @@ class Notification(Base):
 
 
 # ═══════════════════════════════════════════════════════════
+# CHAT MESSAGES — Persistent conversation memory per user
+# ═══════════════════════════════════════════════════════════
+
+class ChatMessage(Base):
+    __tablename__ = "chat_messages"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id: Mapped[str] = mapped_column(String(36), index=True)  # owner of this thread
+
+    # role: "user" | "assistant" | "agent"
+    # "agent" = autonomous LangGraph agent pushed this (e.g. Strategist reporting back)
+    role: Mapped[str] = mapped_column(String(20))
+
+    content: Mapped[str] = mapped_column(Text)
+
+    # Set when role == "agent" — which agent sent this (e.g. "strategist", "publisher")
+    agent_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+
+    # If this message relates to a specific campaign goal
+    goal_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
+
+    # JSON dict for extra context (action taken, metrics, etc.)
+    meta: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+# ═══════════════════════════════════════════════════════════
 # DATABASE ENGINE
 # ═══════════════════════════════════════════════════════════
 
