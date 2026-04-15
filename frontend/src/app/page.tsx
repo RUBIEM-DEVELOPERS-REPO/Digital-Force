@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import Sidebar from '@/components/Sidebar'
 import Link from 'next/link'
 import {
@@ -8,6 +9,7 @@ import {
   ArrowRight, Activity, Zap, CheckCircle2, Clock, AlertCircle
 } from 'lucide-react'
 import api from '@/lib/api'
+import { isAuthenticated } from '@/lib/auth'
 
 interface Goal {
   id: string
@@ -36,15 +38,22 @@ const PLATFORM_ICONS: Record<string, string> = {
 }
 
 export default function MissionControl() {
+  const router = useRouter()
   const [goals, setGoals] = useState<Goal[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    // Client-side auth guard — if no token, bail out immediately
+    if (!isAuthenticated()) {
+      router.replace('/login')
+      return
+    }
+
     api.goals.list()
       .then(setGoals)
       .catch(() => setGoals([]))
       .finally(() => setLoading(false))
-  }, [])
+  }, [router])
 
   const activeGoals = goals.filter(g => ['planning','awaiting_approval','executing','monitoring'].includes(g.status))
   const awaiting = goals.filter(g => g.status === 'awaiting_approval')

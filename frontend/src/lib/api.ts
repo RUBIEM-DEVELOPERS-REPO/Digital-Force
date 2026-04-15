@@ -3,7 +3,7 @@
  * Full coverage of all backend endpoints.
  */
 
-import { getToken } from './auth'
+import { getToken, clearToken } from './auth'
 
 const BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
@@ -34,10 +34,12 @@ async function request<T>(
   const res = await fetch(`${BASE}${path}`, { ...options, headers })
 
   if (res.status === 401) {
-    // Only auto-logout on protected routes, not on the login/register endpoints themselves
+    // Only auto-logout on protected routes, not on the login/register endpoints themselves.
+    // We use clearToken() (not localStorage.clear()) so only auth data is wiped,
+    // and the cookie is also cleared for middleware consistency.
     const isAuthEndpoint = path.startsWith('/api/auth/')
     if (!isAuthEndpoint && typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
-      localStorage.clear()
+      clearToken()
       window.location.replace('/login')
     }
     let msg = 'Invalid credentials'

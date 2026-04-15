@@ -1,10 +1,21 @@
 /**
  * Digital Force — Auth Utilities
- * JWT token management via localStorage.
+ * JWT token management via localStorage + cookie (for Next.js middleware).
  */
 
 const TOKEN_KEY = 'df_token'
 const USER_KEY = 'df_user'
+
+/** Mirror token to a cookie so Next.js middleware can read it server-side. */
+function setTokenCookie(token: string) {
+  // Expires in 24h; SameSite=Lax works fine for same-origin Next.js apps
+  const maxAge = 60 * 60 * 24
+  document.cookie = `df_token=${token}; path=/; max-age=${maxAge}; SameSite=Lax`
+}
+
+function clearTokenCookie() {
+  document.cookie = 'df_token=; path=/; max-age=0; SameSite=Lax'
+}
 
 export const getToken = (): string | null => {
   if (typeof window === 'undefined') return null
@@ -13,11 +24,13 @@ export const getToken = (): string | null => {
 
 export const setToken = (token: string): void => {
   localStorage.setItem(TOKEN_KEY, token)
+  setTokenCookie(token)
 }
 
 export const clearToken = (): void => {
   localStorage.removeItem(TOKEN_KEY)
   localStorage.removeItem(USER_KEY)
+  clearTokenCookie()
 }
 
 export const isAuthenticated = (): boolean => {

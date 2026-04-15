@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 
 const PUBLIC_PATHS = ['/login', '/api', '/_next', '/favicon.ico']
 
+/**
+ * Next.js Edge Middleware — MUST be named `middleware` to be executed.
+ * Protects all private routes by checking the df_token cookie.
+ * The cookie is set alongside localStorage during login (see auth.ts).
+ */
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
 
@@ -25,3 +30,4 @@ export function proxy(request: NextRequest) {
 export const config = {
   matcher: ['/((?!_next/static|_next/image|favicon.ico|.*\\..*).*)'],
 }
+

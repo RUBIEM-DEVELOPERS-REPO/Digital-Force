@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, FormEvent } from 'react'
+import { useState, useEffect, FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import api from '@/lib/api'
-import { setToken, setUser } from '@/lib/auth'
+import { setToken, setUser, isAuthenticated } from '@/lib/auth'
 import { Zap, Eye, EyeOff, AlertCircle } from 'lucide-react'
 
 export default function LoginPage() {
@@ -16,6 +16,13 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+
+  // If already authenticated, skip straight to the dashboard
+  useEffect(() => {
+    if (isAuthenticated()) {
+      router.replace('/')
+    }
+  }, [router])
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
@@ -32,11 +39,19 @@ export default function LoginPage() {
         data = await api.auth.register({ email, password, username, full_name: fullName })
       }
 
+      // Persist token (also sets cookie for middleware)
       setToken(data.access_token)
-      const me = await api.auth.me()
-      setUser(me)
-      // Hard redirect so localStorage token is committed before next page loads
-      window.location.href = '/'
+
+      // Fetch user profile — non-fatal, dashboard will still load without it
+      try {
+        const me = await api.auth.me()
+        setUser(me)
+      } catch {
+        // Token is valid; profile fetch failed (e.g. slow backend). Proceed anyway.
+      }
+
+      // Hard navigate so the cookie is committed before middleware sees the request
+      window.location.replace('/')
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Authentication failed. Check your credentials.')
     } finally {
