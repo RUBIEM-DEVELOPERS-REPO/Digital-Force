@@ -35,6 +35,22 @@ async def strategist_node(state: AgentState) -> dict:
     deadline = state.get("deadline") or (datetime.utcnow() + timedelta(days=7)).isoformat()
     research = state.get("research_findings", {})
 
+    # Fetch Episodic Memory to learn from past runs
+    try:
+        from rag.retriever import retrieve
+        memory_results = await retrieve(
+            query=f"{state['goal_description']} {state.get('platforms', [])}", 
+            collection="knowledge", 
+            top_k=3,
+            filter_metadata={"category": "episodic_memory"}
+        )
+        memories = [m["text"] for m in memory_results]
+    except Exception as e:
+        logger.warning(f"[Strategist] Could not fetch episodic memory: {e}")
+        memories = []
+        
+    episodic_memory_text = "\n".join([f"- {m}" for m in memories]) if memories else "No past lessons available."
+
     prompt = f"""
 MISSION:
 - Goal: {state['goal_description']}
@@ -47,6 +63,10 @@ MISSION:
 
 RESEARCH FINDINGS:
 {json.dumps(research, indent=2) if research else 'No research conducted.'}
+
+EPISODIC MEMORIES (Critical lessons from past campaigns):
+{episodic_memory_text}
+You MUST NOT repeat past failures. Adapt your strategy to respect these memories.
 
 Create a comprehensive, detailed campaign plan with ALL tasks specified.
 Each task must have enough detail for the Content Director to act without clarification.
@@ -71,7 +91,7 @@ Each task must have enough detail for the Content Director to act without clarif
             "campaign_plan": plan,
             "tasks": tasks,
             "messages": [{"role": "strategist", "content": f"Plan created: {len(tasks)} tasks over {duration} days"}],
-            "next_agent": "approval_gateway",
+            "next_agent": "manager",
         }
 
     except Exception as e:
@@ -84,5 +104,5 @@ Each task must have enough detail for the Content Director to act without clarif
         )
         return {
             "error": str(e),
-            "next_agent": "approval_gateway",
+            "next_agent": "manager",
         }

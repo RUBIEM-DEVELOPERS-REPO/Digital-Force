@@ -404,6 +404,7 @@ class AgencySettings(Base):
 
     # ── Autonomous mode ───────────────────────────────────────
     autonomous_mode: Mapped[bool] = mapped_column(Boolean, default=False)
+    risk_tolerance: Mapped[int] = mapped_column(Integer, default=70) # 0-100 scale
 
     # ── Timezone & Brief schedule ─────────────────────────────
     # IANA timezone string e.g. "Africa/Harare", "Europe/London", "America/New_York"

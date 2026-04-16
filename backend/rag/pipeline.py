@@ -59,11 +59,16 @@ async def parse_docx(file_path: str) -> str:
         return ""
 
 
-async def parse_csv(file_path: str) -> str:
-    """Convert CSV rows to natural language text."""
+async def parse_tabular(file_path: str) -> str:
+    """Convert CSV or Excel rows to natural language text."""
     try:
         import pandas as pd
-        df = pd.read_csv(file_path)
+        ext = Path(file_path).suffix.lower()
+        if ext in [".xls", ".xlsx"]:
+            df = pd.read_excel(file_path)
+        else:
+            df = pd.read_csv(file_path)
+            
         # Convert to natural language rows
         rows = []
         for _, row in df.iterrows():
@@ -72,7 +77,7 @@ async def parse_csv(file_path: str) -> str:
         summary = f"Dataset with {len(df)} rows and columns: {', '.join(df.columns.tolist())}\n"
         return summary + "\n".join(rows[:200])  # Cap at 200 rows
     except Exception as e:
-        logger.error(f"CSV parse error: {e}")
+        logger.error(f"Tabular parse error: {e}")
         return ""
 
 
@@ -160,8 +165,8 @@ async def ingest(
         raw_text = await parse_pdf(source_path)
     elif type_lower in ("docx", "doc"):
         raw_text = await parse_docx(source_path)
-    elif type_lower == "csv":
-        raw_text = await parse_csv(source_path)
+    elif type_lower in ("csv", "xlsx", "xls"):
+        raw_text = await parse_tabular(source_path)
     elif type_lower == "url":
         raw_text = await parse_url(source_path)
     elif type_lower in ("image", "png", "jpg", "jpeg", "webp"):

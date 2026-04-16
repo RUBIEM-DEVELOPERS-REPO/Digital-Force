@@ -1,75 +1,49 @@
-# $50 Million Enterprise UI/UX Implementation Plan
+# Knowledge Base Segregation & Seamless Media Integration
 
-This plan details the technical execution of the Digital Force UI/UX Master Prompt.
+This plan implements the requested separation between the "Training" and "Media Library" functions within the Knowledge page, and introduces a frictionless media referencing workflow directly into the Agentic Hub chat interface.
 
 ## User Review Required
 
-> [!CAUTION]
-> **Dependency Addition:** We will install `framer-motion` to handle the complex, premium animations (page transitions, micro-hover states, neural processing animations). Please approve this addition.
-> **Route Deletion:** The `/app/media` and `/app/training` routes will be completely removed and consolidated into a single `/app/knowledge` route.
+> [!IMPORTANT]
+> **Asset Referencing Payload:** When referencing a media asset in the chat, the frontend will attach the asset's URI/ID to the backend payload. Please confirm if modifying the `/api/chat/stream` `context` object to include `{ "attached_media": [asset_id] }` aligns with your backend processing logic.
 
 ## Proposed Changes
 
-### 1. Global Setup & Design Tokens
-#### [MODIFY] package.json
-- Add `framer-motion` for enterprise-grade animations.
+---
 
-#### [MODIFY] globals.css
-- Refine existing CSS variables to exact match the "Obsidian & Neon" palette.
-- Replace generic `animate-pulse` with custom `framer-motion` integrated classes.
-- Ban default scrollbars completely; implement the sleek, 1px translucent purple scrollbar.
+### 1. Segregating Knowledge & Training
+The current `frontend/src/app/knowledge/page.tsx` unifies media and documents. We will restructure this page to have two distinct main components logically separated: **Training** and **Media Library**.
 
-### 2. Branding & Navigation 
-#### [MODIFY] Sidebar.tsx
-- **Name scrubbing:** Change all "ASMIA" text to "Digital Force".
-- **Iconography:** Audit and switch all emoji-based icons to `lucide-react`.
-- **Navigation Links:**
-  - Rename "Mission Control" -> "Command Center"
-  - Rename "Chat" -> "Neural Link"
-  - Merge "Media" & "Training" links into a single "Knowledge" link.
-- **Visuals:** Apply the `glass-panel` aesthetic strictly. The active state will use a glowing subtle left border.
+#### [MODIFY] `frontend/src/app/knowledge/page.tsx`
+- **Tab/Mode Split:** Create primary tabs/modes for **"Training"** (vectorizing standard files like CSV, Excel, PDF, URLs) and **"Media Library"** (storage for raw assets like Banners, Images, Video).
+- **Training Tab:** Includes the drop zone specifically configured for documents, URLs, and Notes. Uploads here route to the vector database.
+- **Media Library Tab:** Displays a rich visual grid for assets with an integrated upload button strictly for visual/audio media. 
 
-### 3. The Central Feature Overhaul
-#### [NEW] app/knowledge/page.tsx
-- Create the unified "Knowledge Core".
-- Add an inline renaming component for media/notes.
-- Implement a split-pane or dual-tab internal view to handle both raw text ingestion and media uploads seamlessly in one UI space.
-- Add visual indicators for "Semantic Search" readiness.
+### 2. Agentic Hub Chat Additions
+We will add a mechanism to easily reference and upload assets directly from the chat screen without breaking the user's flow.
 
-#### [DELETE] app/media/page.tsx
-#### [DELETE] app/training/page.tsx
-- Both sub-apps are eradicated to favor the unified Knowledge hub.
+#### [MODIFY] `frontend/src/app/chat/page.tsx`
+- **New `+` Button:** Inject a `lucide-react` Plus icon button into the left side of the bottom input bar (opposite the Send button).
+- **Asset Preview Popover/Modal:** Clicking `+` will toggle an `AssetSelector` overlay. This overlay will fetch and map over `api.media.list()` to show visual thumbnails of existing Media Library assets.
+- **Seamless Upload:** Include an "Upload New" button inside this preview. Clicking it opens the native file picker, uploads the new media silently via `api.media.upload()`, and auto-selects it so it is ready to be sent.
+- **Message Input State:** Add an `attachedMedia` state array. Selecting an asset from the preview will render a chip or thumbnail above the textarea. When the user clicks "Send", the `asset.id` and `asset.public_url` will be forwarded to the backend context.
 
-### 4. Component Refinements
-#### [MODIFY] app/page.tsx (Landing Page)
-- Completely strip the current page.tsx. 
-- Implement a dark, cinematic hero section with an animated mesh background.
-- Emphasize the "Deploy Agency" / Sign In authentication gateways.
+#### [NEW] `frontend/src/components/chat/AssetSelector.tsx` (Optional)
+- We may extract the media fetching grid and upload logic into a clean child component to keep `page.tsx` maintainable if it gets too large.
 
-#### [MODIFY] app/chat/page.tsx
-- Replace standard chat styling with the "Neural Link" aesthetic.
-- Add the Framer Motion "Processing Hex" or waveform animation block for when the agent is waiting.
-- Style the Web Search / Tool Execution blocks as high-end glowing cards rather than text snippets.
-
-#### [MODIFY] app/analytics/page.tsx
-- Apply the data-visualization updates. Tooltips will be converted to glassmorphic panels. Gradients will fade to exactly zero opacity at the baseline.
-
-#### [MODIFY] app/goals/page.tsx & app/skills/page.tsx
-- Rebuild the grid cards to feature subtle 3D hover tilts and thin glowing progress bars.
-- Replace all text that sounds "basic" (like "Goal is running") to "Execution Protocol Active".
+---
 
 ## Open Questions
 
-> [!IMPORTANT]
-> 1. Do you have a specific color preference for the "Neon" accents, or should I proceed with the deep Purple (`#7C3AED`) and Cyan (`#06B6D4`) already mapped out in your globals?
-> 2. For the Landing Page, should the "Sign In" simply link to `/login` or would you prefer a modal overlay?
+- **Vectorizing Excel/CSV:** Does your existing `api.training.upload` backend endpoint natively support parsing `.xlsx` and `.csv` right now, or should we filter the accepted file types for now?
+- **Referenced Asset Display:** When the AI agent replies, should it also render the image/video if it utilizes the asset you referenced, or should only your prompt show the thumbnail?
 
 ## Verification Plan
 
 ### Automated Tests
-- Run Next.js build validation (`npm run build`) to ensure no broken links after deleting `/media` and `/training`.
+- Ensure `AssetSelector` loads without breaking the chat stream pipeline.
 
 ### Manual Verification
-- Compile development server and inspect the UI visually.
-- Verify Framer Motion animations trigger properly on mount.
-- Validate the inline-renaming capability in the new **Knowledge** hub.
+1. Navigate to the "Knowledge" page and ensure the "Training" layout clearly differs from the "Media Library" layout.
+2. In the "Training" tab, verify that documents/text/links are prioritized.
+3. Navigate to "Agentic Hub", click `+`, upload a banner seamlessly, click the uploaded banner, and type a prompt. Verify the UI correctly queues the banner and passes it to the AI.

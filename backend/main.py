@@ -56,6 +56,10 @@ async def lifespan(app: FastAPI):
     logger.info(f"🧠 LLM cascade: Groq Keys: {[bool(settings.groq_api_key_1), bool(settings.groq_api_key_2), bool(settings.groq_api_key_3)]}")
     logger.info(f"📡 Publishing: Buffer={bool(settings.buffer_access_token)} | Facebook={bool(settings.facebook_access_token)}")
 
+    # 👻 Start the Ghost Browser (Persistent Session Playwright)
+    from agent.browser.ghost import ghost
+    await ghost.start()
+
     # 🤖 Start the Agency Daemon — 24/7 autonomous agent heartbeat
     from agent.agency_daemon import agency_daemon
     asyncio.create_task(agency_daemon())
@@ -71,6 +75,9 @@ async def lifespan(app: FastAPI):
     yield
 
     logger.info("👋 Digital Force shutting down...")
+    
+    # Clean up browser persistence
+    await ghost.stop()
 
 
 app = FastAPI(

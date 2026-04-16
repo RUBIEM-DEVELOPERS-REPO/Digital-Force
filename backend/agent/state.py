@@ -3,9 +3,16 @@ Digital Force Agent State
 Shared TypedDict state flowing through the LangGraph agent graph.
 """
 
+import operator
 from typing import TypedDict, Annotated, Optional, Any
 from langgraph.graph.message import add_messages
 from datetime import datetime
+
+def reduce_list(left: list, right: list) -> list:
+    """Safely merge lists for map-reduce parallel swarms."""
+    if not left: left = []
+    if not right: right = []
+    return left + right
 
 
 class AgentState(TypedDict):
@@ -31,8 +38,9 @@ class AgentState(TypedDict):
 
     # ── Execution state ──────────────────────────────────
     current_task_id: Optional[str]
-    completed_task_ids: list[str]
-    failed_task_ids: list[str]
+    completed_task_ids: Annotated[list[str], reduce_list]
+    failed_task_ids: Annotated[list[str], reduce_list]
+    content_swarm_results: Annotated[list[dict], reduce_list] # Stores generated content from parallel nodes
 
     # ── Monitor ──────────────────────────────────────────
     kpi_snapshot: dict            # Latest analytics vs targets
@@ -47,5 +55,7 @@ class AgentState(TypedDict):
 
     # ── Control flow ─────────────────────────────────────
     next_agent: Optional[str]     # Which agent to route to next
+    target_agent: Optional[str]   # Where the manager wanted to go before Auditor intercepted
+    risk_score: Optional[int]     # 0-100 risk grading
     error: Optional[str]
     iteration_count: int

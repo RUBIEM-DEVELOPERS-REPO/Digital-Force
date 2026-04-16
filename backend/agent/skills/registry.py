@@ -83,6 +83,19 @@ def _import_skill(skill_name: str) -> Any:
     return module
 
 
+def _hot_patch_skill(skill_name: str, old_selector: str, new_selector: str) -> bool:
+    """Overwrites the python file on disk to patch a broken DOM selector."""
+    file_path = SKILLS_DIR / f"{skill_name}.py"
+    if file_path.exists():
+        content = file_path.read_text(encoding="utf-8")
+        if old_selector in content:
+            content = content.replace(old_selector, new_selector)
+            file_path.write_text(content, encoding="utf-8")
+            logger.info(f"[SkillRegistry] Hot-patched {skill_name}.py: '{old_selector}' -> '{new_selector}'")
+            return True
+    return False
+
+
 async def run_skill(skill_name: str, **kwargs) -> dict:
     """
     Load and execute a generated skill by name.
@@ -113,6 +126,34 @@ async def run_skill(skill_name: str, **kwargs) -> dict:
 
         if not isinstance(result, dict):
             result = {"success": True, "result": result}
+
+        # ─── DOM AUTO-HEALER ──────────────────────────────
+        if not result.get("success") and result.get("error_type") == "TimeoutError" and result.get("screenshot_path"):
+            old_selector = result.get("failed_selector", "")
+            logger.warning(f"[SkillRegistry] TimeoutError detected in {skill_name}. Engaging Vision Healer for '{old_selector}'...")
+            
+            from agent.llm import heal_dom_selector
+            new_selector = await heal_dom_selector(
+                screenshot_path=result.get("screenshot_path"),
+                failed_selector=old_selector
+            )
+            
+            if new_selector and new_selector != old_selector:
+                logger.info(f"[SkillRegistry] Vision Healer mapped new selector: {new_selector}. Hot-patching...")
+                patched = _hot_patch_skill(skill_name, old_selector, new_selector)
+                if patched:
+                    # Evict module cache and retry with the patched source
+                    _loaded_modules.pop(skill_name, None)
+                    module = _import_skill(skill_name)
+                    func = getattr(module, func_name, None)
+                    if func:
+                        import asyncio
+                        logger.info(f"[SkillRegistry] Retrying {skill_name} with healed selector.")
+                        if asyncio.iscoroutinefunction(func):
+                            result = await func(**kwargs)
+                        else:
+                            result = func(**kwargs)
+        # ──────────────────────────────────────────────────
 
         logger.info(f"[SkillRegistry] Ran '{skill_name}' → success={result.get('success')}")
         return result

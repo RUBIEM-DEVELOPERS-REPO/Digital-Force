@@ -5,7 +5,6 @@ The conversational face of Digital Force. Instantly receives user commands, dete
 
 import logging
 from agent.state import AgentState
-from agent.llm import generate_structured_output
 from agent.chat_push import chat_push
 
 logger = logging.getLogger(__name__)
@@ -20,7 +19,8 @@ async def executive_node(state: AgentState) -> dict:
     messages = state.get("messages", [])
     
     if not messages:
-        return {"next_agent": "__end__"}
+        # Automated trigger / API POST without UI history: skip intent evaluation and go straight to Manager
+        return {"next_agent": "manager"}
         
     last_message = messages[-1] if isinstance(messages[-1], str) else messages[-1].get("content", "")
     logger.info(f"[Executive] Processing user message: {last_message[:50]}...")

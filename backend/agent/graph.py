@@ -15,12 +15,26 @@ from agent.nodes.content_director import content_director_node
 from agent.nodes.publisher import publisher_node
 from agent.nodes.skillforge import skillforge_node
 from agent.nodes.monitor import monitor_node
+from agent.nodes.auditor import auditor_node
+from agent.nodes.reflector import reflector_node
 
 logger = logging.getLogger(__name__)
 
-def manager_router(state: AgentState) -> str:
+def manager_router(state: AgentState):
     """Read the routing decision made by the manager_node or executive_node."""
     nxt = state.get("next_agent")
+    
+    if nxt == "content_director":
+        tasks = state.get("tasks", [])
+        completed = state.get("completed_task_ids", [])
+        failed = state.get("failed_task_ids", [])
+        uncompleted = [t for t in tasks if t.get("task_type") == "generate_content" and t.get("id") not in completed and t.get("id") not in failed]
+        
+        from langgraph.constants import Send
+        if uncompleted:
+            return [Send("content_director", {**state, "current_task_id": t["id"]}) for t in uncompleted]
+        return "publisher"
+        
     if not nxt or nxt == "__end__":
         return END
     return nxt
@@ -43,6 +57,8 @@ def build_neural_graph() -> StateGraph:
     graph.add_node("publisher", publisher_node)
     graph.add_node("skillforge", skillforge_node)
     graph.add_node("monitor", monitor_node)
+    graph.add_node("auditor", auditor_node)
+    graph.add_node("reflector", reflector_node)
 
     # Set Entry Point
     graph.set_entry_point("executive")
@@ -62,6 +78,8 @@ def build_neural_graph() -> StateGraph:
         "publisher": "publisher",
         "skillforge": "skillforge",
         "monitor": "monitor",
+        "auditor": "auditor",
+        "reflector": "reflector",
         END: END
     })
 
@@ -73,6 +91,15 @@ def build_neural_graph() -> StateGraph:
     graph.add_edge("publisher", "manager")
     graph.add_edge("skillforge", "manager")
     graph.add_edge("monitor", "manager")
+    graph.add_edge("reflector", "manager")
+    
+    # Auditor conditional routing: if it passes, it goes to target_agent. If it halts, it ends.
+    graph.add_conditional_edges("auditor", manager_router, {
+        "publisher": "publisher",
+        "skillforge": "skillforge",
+        "manager": "manager",
+        END: END
+    })
 
     return graph.compile()
 

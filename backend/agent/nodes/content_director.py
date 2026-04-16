@@ -58,11 +58,16 @@ async def content_director_node(state: AgentState) -> dict:
     tasks = state.get("tasks", [])
     completed = state.get("completed_task_ids", [])
 
-    # Find next content task to execute
-    pending_task = next(
-        (t for t in tasks if t.get("task_type") == "generate_content" and t.get("id") not in completed),
-        None
-    )
+    current_id = state.get("current_task_id")
+    
+    # ── Map-Reduce Execution Targeting ──
+    if current_id:
+        pending_task = next((t for t in tasks if t.get("id") == current_id), None)
+    else:
+        pending_task = next(
+            (t for t in tasks if t.get("task_type") == "generate_content" and t.get("id") not in completed),
+            None
+        )
 
     if not pending_task:
         return {"next_agent": "publisher", "messages": [{"role": "content_director", "content": "All content tasks complete."}]}
@@ -113,10 +118,19 @@ Write compelling, {platform}-native content that drives real engagement.
 
         logger.info(f"[ContentDirector] Generated content for {platform}: {result.get('hook', '')[:50]}...")
 
+        # Mutate the active task queue so it is ready for publishing
+        new_tasks = []
+        for t in tasks:
+            if t.get("id") == pending_task.get("id"):
+                t["result"] = result
+                t["task_type"] = "post_content"
+            new_tasks.append(t)
+
         return {
             "messages": [{"role": "content_director", "content": f"Content written for {platform}: {result.get('hook', '')[:60]}..."}],
-            "completed_task_ids": completed + [pending_task.get("id", "")],
-            "next_agent": "visual_designer",
+            "completed_task_ids": [pending_task.get("id", "")], # Delta
+            "content_swarm_results": [{"task_id": pending_task.get("id", ""), "result": result}], # Delta
+            "next_agent": "visual_designer", # In swarm mode this is ignored by router
             "current_task_id": pending_task.get("id"),
         }
 
@@ -124,5 +138,5 @@ Write compelling, {platform}-native content that drives real engagement.
         logger.error(f"[ContentDirector] Error: {e}")
         return {
             "error": str(e),
-            "next_agent": "visual_designer",
+            "next_agent": "manager",
         }

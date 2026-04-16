@@ -142,3 +142,33 @@ async def search_social_trends(
     result["topic"] = topic
     result["platforms"] = platforms or []
     return result
+
+
+async def scrape_website(url: str) -> str:
+    """
+    Extract the raw content of a specific URL using Tavily's extract API.
+    Bypasses Cloudflare and other bot protections.
+    """
+    if not settings.tavily_api_key:
+        return "Error: Tavily API key not configured."
+
+    import httpx
+    payload = {
+        "api_key": settings.tavily_api_key,
+        "urls": [url],
+        "include_raw_content": True
+    }
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.post("https://api.tavily.com/extract", json=payload)
+            resp.raise_for_status()
+            data = resp.json()
+            
+        results = data.get("results", [])
+        if results and results[0].get("raw_content"):
+            return results[0]["raw_content"]
+        else:
+            return f"Failed to extract content from {url}. It may be blocking scrapers or returning empty HTML."
+    except Exception as e:
+        logger.error(f"[Scraper] Failed to scrape {url}: {e}")
+        return f"Error scraping {url}: {str(e)}"

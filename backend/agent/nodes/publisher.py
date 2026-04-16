@@ -240,8 +240,8 @@ async def publisher_node(state: AgentState) -> dict:
 
     return {
         "tasks": tasks,  # Return updated tasks with error strings 
-        "completed_task_ids": list(completed) + newly_completed,
-        "failed_task_ids": list(failed) + newly_failed,
+        "completed_task_ids": newly_completed, # Delta
+        "failed_task_ids": newly_failed, # Delta
         "messages": messages,
         "next_agent": "skillforge" if newly_failed else "monitor",
     }

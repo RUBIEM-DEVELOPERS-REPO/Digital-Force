@@ -138,10 +138,14 @@ async def _send_approval_notification(goal_id: str, token: str, plan: dict):
         msg["To"] = s.smtp_username
         msg.attach(MIMEText(body, "html"))
 
-        with smtplib.SMTP(s.smtp_host, s.smtp_port) as server:
-            server.starttls()
-            server.login(s.smtp_username, s.smtp_password)
-            server.send_message(msg)
+        def _send():
+            with smtplib.SMTP(s.smtp_host, s.smtp_port) as server:
+                server.starttls()
+                server.login(s.smtp_username, s.smtp_password.replace(" ", ""))
+                server.send_message(msg)
+                
+        import asyncio
+        await asyncio.to_thread(_send)
 
         logger.info(f"[Notify] Approval email sent for goal {goal_id}")
     except Exception as e:
@@ -221,10 +225,11 @@ async def list_goals(
     user: dict = Depends(get_current_user),
 ):
     result = await db.execute(select(Goal).order_by(desc(Goal.created_at)).limit(50))
+    goals = result.scalars().all()
     returns = []
     for g in goals:
         latest_activity = None
-        if g.status in ["planning", "executing", "monitoring"]:
+        if g.status in ["planning", "executing", "monitoring", "failed"]:
             log_res = await db.execute(select(AgentLog).where(AgentLog.goal_id == g.id).order_by(desc(AgentLog.created_at)).limit(1))
             log = log_res.scalar_one_or_none()
             if log:

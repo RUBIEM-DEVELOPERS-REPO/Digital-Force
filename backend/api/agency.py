@@ -36,6 +36,7 @@ class BriefSlot(BaseModel):
 
 class AgencySettingsUpdate(BaseModel):
     autonomous_mode: Optional[bool] = None
+    risk_tolerance: Optional[int] = None
     timezone: Optional[str] = None
     industry: Optional[str] = None
     brand_voice: Optional[str] = None
@@ -53,6 +54,7 @@ async def _get_or_create_settings(user_id: str, db: AsyncSession) -> AgencySetti
             id=str(uuid.uuid4()),
             user_id=user_id,
             autonomous_mode=False,
+            risk_tolerance=70,
             timezone="UTC",
             brief_slots="[]",
         )
@@ -64,6 +66,7 @@ async def _get_or_create_settings(user_id: str, db: AsyncSession) -> AgencySetti
 def _serialize(cfg: AgencySettings) -> dict:
     return {
         "autonomous_mode": cfg.autonomous_mode,
+        "risk_tolerance": cfg.risk_tolerance,
         "timezone": cfg.timezone,
         "industry": cfg.industry,
         "brand_voice": cfg.brand_voice,
@@ -103,6 +106,9 @@ async def update_agency_settings(
     if body.autonomous_mode is not None:
         cfg.autonomous_mode = body.autonomous_mode
         logger.info(f"[Agency] Autonomous mode {'ON' if body.autonomous_mode else 'OFF'} for {user_id}")
+
+    if body.risk_tolerance is not None:
+        cfg.risk_tolerance = body.risk_tolerance
 
     if body.timezone is not None:
         # Basic sanity check on timezone string

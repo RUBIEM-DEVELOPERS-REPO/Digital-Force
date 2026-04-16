@@ -24,6 +24,28 @@ async def manager_node(state: AgentState) -> dict:
     user_id = state.get('created_by', '')
     logger.info(f"[Supervisor] Evaluating state for goal: {goal_id[:8]}...")
     
+    tasks = state.get("tasks", [])
+    
+    # ── Map-Reduce Results Stitching ──
+    # If the content directors generated results in parallel, stitch them back into the task objects.
+    swarm_res = state.get("content_swarm_results", [])
+    state_updates = {}
+    if swarm_res:
+        new_tasks = []
+        has_new = False
+        for t in tasks:
+            t_copy = dict(t)
+            for res in swarm_res:
+                if res.get("task_id") == t.get("id") and "result" not in t_copy:
+                    t_copy["result"] = res["result"]
+                    t_copy["task_type"] = "post_content"
+                    has_new = True
+            new_tasks.append(t_copy)
+            
+        if has_new:
+            tasks = new_tasks
+            state_updates["tasks"] = tasks
+    
     # 1. Compress State for LLM
     tasks = state.get("tasks", [])
     completed = state.get("completed_task_ids", [])
@@ -39,8 +61,8 @@ async def manager_node(state: AgentState) -> dict:
         "tasks_total": len(tasks),
         "tasks_completed": len(completed),
         "tasks_failed": len(failed),
-        "uncompleted_content_tasks": len([t for t in uncompleted if t.get("task_type") == "post_content" and not t.get("result")]),
-        "uncompleted_publish_tasks": len([t for t in uncompleted if t.get("task_type") == "post_content" and t.get("result")]),
+        "uncompleted_content_tasks": len([t for t in uncompleted if t.get("task_type") == "generate_content"]),
+        "uncompleted_publish_tasks": len([t for t in uncompleted if t.get("task_type") == "post_content"]),
     }
 
     # 2. Dynamic True NLP Routing
@@ -73,7 +95,17 @@ Return strictly JSON:
         next_agent = response.get("next_agent", "__end__")
         thought = response.get("thought", "Routing determined from current state.")
         await chat_push(user_id, f"Manager: {thought}", "digital force - manager", goal_id)
-        return {"next_agent": next_agent}
+        
+        # Intercept high-risk execution nodes for Auditing
+        if next_agent in ["publisher", "skillforge"]:
+            state_updates.update({
+                "next_agent": "auditor",
+                "target_agent": next_agent
+            })
+            return state_updates
+            
+        state_updates["next_agent"] = next_agent
+        return state_updates
     except Exception as e:
         logger.error(f"[Manager] NLP Routing failed: {e}")
         # absolute fallback

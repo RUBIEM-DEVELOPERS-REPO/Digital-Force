@@ -46,20 +46,15 @@ real Chromium browser. This is available in the E2B sandbox.
 Playwright skill example:
 ```python
 async def scrape_linkedin_profile(username: str) -> dict:
-    \"\"\"Scrape a LinkedIn public profile using a headless browser.\"\"\"
-    from playwright.async_api import async_playwright
+    \"\"\"Scrape a LinkedIn public profile using the Ghost Browser.\"\"\"
+    from agent.browser.ghost import ghost
     try:
-        async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=True)
-            context = await browser.new_context(
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-            )
-            page = await context.new_page()
-            await page.goto(f"https://www.linkedin.com/in/{username}/", wait_until="networkidle")
-            name = await page.text_content("h1.top-card-layout__title") or "Unknown"
-            headline = await page.text_content("h2.top-card-layout__headline") or ""
-            await browser.close()
-            return {"success": True, "name": name.strip(), "headline": headline.strip()}
+        page = await ghost.get_page()
+        await page.goto(f"https://www.linkedin.com/in/{username}/", wait_until="networkidle")
+        name = await page.text_content("h1.top-card-layout__title") or "Unknown"
+        headline = await page.text_content("h2.top-card-layout__headline") or ""
+        await page.close()
+        return {"success": True, "name": name.strip(), "headline": headline.strip()}
     except Exception as e:
         return {"success": False, "error": str(e)}
 ```
@@ -79,11 +74,12 @@ async def check_hashtag_trend(hashtag: str, platform: str) -> dict:
 ```
 
 When using Playwright:
-- Always set `headless=True`
-- Set a realistic `user_agent` to avoid bot detection
-- Use `wait_until="networkidle"` or specific selectors with `wait_for_selector`
-- Always call `await browser.close()` before returning
-- Use `page.screenshot(path="/tmp/debug.png")` if you need to debug page state
+- You MUST use `from agent.browser.ghost import ghost`
+- Use `page = await ghost.get_page()` to get an authenticated persistent tab
+- NEVER use `async_playwright()`. The Ghost Browser handles persistence and anti-bot mitigation.
+- Use `wait_until="networkidle"` or specific selectors with `page.wait_for_selector`
+- YOU MUST call `await page.close()` before returning to avoid resource leaks
+- Use `await page.screenshot(path="debug_skill.png")` if you need to debug page state
 
 Write clean, production-ready Python. No placeholder code."""
 
@@ -286,8 +282,11 @@ IMPORTANT: You MUST physically use page.fill() or page.type() to input these cre
             break
 
     playwright_hint = (
-        "\n\nIMPORTANT: Use Playwright (headless Chromium browser) for this skill — no API is available. "
-        "The sandbox has Playwright installed. Use `from playwright.async_api import async_playwright` inside the function."
+        "\n\nIMPORTANT: Use Playwright via Ghost Browser for this skill. "
+        "Use `from agent.browser.ghost import ghost` and `page = await ghost.get_page()`. "
+        "Do NOT use `async_playwright` or launch browsers yourself. Always await `page.close()` when done."
+        "\nDOM AUTO-HEAL INSTRUCTION: If any `page.locator()` or `wait_for_selector` times out, you MUST wrap it in a try/except, take a screenshot using `await page.screenshot(path='error_heal.png')`, close the page, and return it exactly like this:\n"
+        " `return {'success': False, 'error': str(e), 'error_type': 'TimeoutError', 'screenshot_path': 'error_heal.png', 'failed_selector': 'the_css_selector_that_failed'}`"
         + creds_injected
     ) if use_playwright else ""
 
@@ -364,8 +363,60 @@ Return a dict with a "success" key always.{playwright_hint}
             }
     else:
         # Sandbox test failed
-        logger.warning(f"[SkillForge] Validation failed: {test_result.get('error')}")
-        user_id = state.get("created_by")
+        error_msg = test_result.get('error', '')
+        failed_dom = test_result.get('dom', '')
+
+        # ── DOM-DRIVEN AUTO-HEALING ──
+        if failed_dom and use_playwright:
+            if user_id:
+                await chat_push(user_id, f"🛠️ **DOM Auto-Healing Triggered!** Playwright locator crashed. Feeding {len(failed_dom)} bytes of actual DOM text to Llama-3 to recalculate selectors...", "skillforge", state.get("goal_id"))
+            
+            repair_prompt = f"""
+You wrote Playwright script '{skill_name}', but it crashed with this error:
+{error_msg}
+
+Here is the raw text structure (innerHTML) of the page when it crashed:
+{failed_dom}
+
+Based ONLY on the true DOM text above, deduce the correct layout, text, or elements to target.
+Rewrite the ENTIRE Python function `{skill_name}` fixing the selector logic. DO NOT hallucinate selectors that don't exist in the text.
+"""
+            raw_code = await generate_completion(repair_prompt, SKILL_SYSTEM_PROMPT)
+            code_match = re.search(r'```python\n(.*?)```', raw_code, re.DOTALL)
+            clean_code = code_match.group(1) if code_match else raw_code
+            
+            # Retry Execution
+            test_result = await run_in_e2b(clean_code, skill_name, skill_spec.get("test_args", {}))
+            
+            if test_result.get("success"):
+                if user_id:
+                    await chat_push(user_id, "✅ **DOM Auto-Healing Successful!** Repaired selectors and passed execution.", "skillforge", state.get("goal_id"))
+                
+                # Save skill + metadata (Duplicated success logic for healed state)
+                skill_file = SKILLS_DIR / f"{skill_name}.py"
+                skill_file.write_text(
+                    f'"""\nGenerated by SkillForge (Auto-Healed) — {datetime.utcnow().isoformat()}\n'
+                    f'{skill_spec.get("description")}\n"""\n\n{clean_code}'
+                )
+                save_skill_metadata(skill_name, {
+                    "function_name": skill_name,
+                    "display_name": skill_spec.get("display_name", skill_name),
+                    "description": skill_spec.get("description", ""),
+                    "input_params": skill_spec.get("input_params", {}),
+                    "risk_level": risk_level,
+                    "created_at": datetime.utcnow().isoformat(),
+                })
+                current_failed = state.get("failed_task_ids", [])
+                fixed_failed = [t for t in current_failed if t not in [ft.get("id") for ft in failed_task_details]]
+
+                return {
+                    "new_skills_created": new_skills + [skill_name],
+                    "failed_task_ids": fixed_failed,
+                    "messages": [{"role": "skillforge", "content": f"Auto-applied fix via DOM-healed skill: {skill_name}"}],
+                    "next_agent": "publisher",
+                }
+
+        logger.warning(f"[SkillForge] Validation failed completely: {error_msg}")
         if user_id:
             await agent_thought_push(
                 user_id=user_id,
@@ -374,6 +425,6 @@ Return a dict with a "success" key always.{playwright_hint}
                 goal_id=state.get("goal_id")
             )
         return {
-            "messages": [{"role": "skillforge", "content": "Skill validation failed after web-informed attempt."}],
+            "messages": [{"role": "skillforge", "content": "Skill validation failed."}],
             "next_agent": "monitor",
         }

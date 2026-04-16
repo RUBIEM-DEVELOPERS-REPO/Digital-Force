@@ -174,3 +174,50 @@ def get_llm_client():
         "groq_3": bool(s.groq_api_key_3),
         "stream_chat": stream_chat_response,
     }
+
+
+async def heal_dom_selector(screenshot_path: str, failed_selector: str) -> Optional[str]:
+    """Uses Groq Llama-3.2-Vision to hot-patch broken CSS selectors from a DOM snapshot."""
+    key = settings.groq_api_key_1 or settings.groq_api_key_2 or settings.groq_api_key_3
+    if not key:
+        logger.warning("[Vision Healer] No Groq API key available for Vision Healing.")
+        return None
+        
+    try:
+        import base64
+        import os
+        from groq import AsyncGroq
+        
+        if not os.path.exists(screenshot_path):
+            return None
+            
+        client = AsyncGroq(api_key=key, max_retries=1)
+        
+        with open(screenshot_path, "rb") as f:
+            b64 = base64.b64encode(f.read()).decode()
+            
+        prompt = (
+            f"The CSS selector '{failed_selector}' timed out and failed acting on this page. "
+            "Examine this screenshot of the page at the time of failure. Identify the UI element "
+            "that the script was trying to interact with using that old selector. "
+            "Return ONLY the new valid CSS selector string that targets that element. No markdown, no explanations."
+        )
+        
+        resp = await client.chat.completions.create(
+            model="llama-3.2-90b-vision-preview",
+            messages=[{
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{b64}"}}
+                ]
+            }],
+            max_tokens=50,
+            temperature=0.1
+        )
+        new_selector = resp.choices[0].message.content.strip().strip("'\"`")
+        if new_selector and len(new_selector) < 100:
+            return new_selector
+    except Exception as e:
+        logger.error(f"[Vision Healer] Failed to heal DOM selector: {e}")
+    return None

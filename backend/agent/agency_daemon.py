@@ -374,25 +374,44 @@ async def _check_brief_schedule(user_id: str, cfg, now: datetime, active_goals: 
         user_hhmm = user_now.strftime("%H:%M")
         user_date = user_now.strftime("%Y-%m-%d")
         user_weekday = user_now.weekday()  # 0=Mon, 6=Sun
+        updated = False
 
         for slot in slots:
-            if slot.get("time") != user_hhmm:
-                continue
-
+            last_sent = slot.get("last_sent_date")
             recurrence = slot.get("recurrence", "daily")
+            scheduled_time = slot.get("time")
 
             is_due = False
-            if recurrence == "daily":
-                is_due = True
-            elif recurrence == "weekdays" and user_weekday < 5:
-                is_due = True
-            elif recurrence == "weekly" and user_weekday == 0:  # Monday
-                is_due = True
-            elif recurrence == "once" and slot.get("date") == user_date:
-                is_due = True
+
+            if recurrence == "once":
+                slot_date = slot.get("date")
+                if not slot_date or last_sent:  # Already sent once
+                    continue
+                if user_date > slot_date or (user_date == slot_date and user_hhmm >= scheduled_time):
+                    is_due = True
+            else:
+                if last_sent == user_date:
+                    continue  # Already sent today
+                if user_hhmm >= scheduled_time:
+                    if recurrence == "daily":
+                        is_due = True
+                    elif recurrence == "weekdays" and user_weekday < 5:
+                        is_due = True
+                    elif recurrence == "weekly" and user_weekday == 0:
+                        is_due = True
 
             if is_due:
                 await _send_brief(user_id, cfg, slot, now, active_goals)
+                slot["last_sent_date"] = user_date
+                updated = True
+
+        if updated:
+            from database import async_session
+            cfg.brief_slots = json.dumps(slots)
+            async with async_session() as session:
+                # Refresh object to push to DB
+                cfg_ref = await session.merge(cfg)
+                await session.commit()
 
     except Exception as e:
         logger.error(f"[Daemon] Brief schedule check failed for {user_id}: {e}")

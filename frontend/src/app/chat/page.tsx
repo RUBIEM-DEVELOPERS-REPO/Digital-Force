@@ -2,9 +2,11 @@
 
 import { useState, useEffect, useRef, useCallback, KeyboardEvent } from 'react'
 import Sidebar from '@/components/Sidebar'
-import { Send, Trash2, Bot, User, Zap, MessageSquare } from 'lucide-react'
+import { Send, Trash2, Bot, User, Zap, MessageSquare, Plus, X, Image as ImageIcon } from 'lucide-react'
+import { AnimatePresence } from 'framer-motion'
 import { getToken } from '@/lib/auth'
-import api from '@/lib/api'
+import api, { MediaAsset } from '@/lib/api'
+import AssetSelector from '@/components/chat/AssetSelector'
 
 const BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
@@ -73,9 +75,17 @@ export default function ChatPage() {
   const [lastPollTime, setLastPollTime] = useState<string | null>(null)
   const [agentsActive, setAgentsActive] = useState(false)
   const [currentActivity, setCurrentActivity] = useState<string | null>(null)
+  
+  const [showAssetSelector, setShowAssetSelector] = useState(false)
+  const [attachedMedia, setAttachedMedia] = useState<MediaAsset[]>([])
 
   const bottomRef    = useRef<HTMLDivElement>(null)
   const textareaRef  = useRef<HTMLTextAreaElement>(null)
+  const plusButtonRef = useRef<HTMLButtonElement>(null)
+
+  const handleSelectAsset = useCallback((asset: MediaAsset) => {
+    setAttachedMedia(prev => prev.find(a => a.id === asset.id) ? prev : [...prev, asset])
+  }, [])
 
   // ── Load history on mount ─────────────────────────────────
   useEffect(() => {
@@ -133,6 +143,8 @@ export default function ChatPage() {
 
     setInput('')
     setLoading(true)
+    const currentAttached = [...attachedMedia]
+    setAttachedMedia([])
 
     const now = new Date().toISOString()
 
@@ -160,13 +172,18 @@ export default function ChatPage() {
 
     try {
       const token = getToken()
+      const attachedIds = attachedMedia.map(a => a.id)
+      setAttachedMedia([]) // clear UI on submit
       const response = await fetch(`${BASE}/api/chat/stream`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ message: msg, context: {} }),
+        body: JSON.stringify({ 
+          message: msg, 
+          context: attachedIds.length > 0 ? { attached_media: attachedIds } : {} 
+        }),
       })
 
       if (!response.ok) throw new Error(`HTTP ${response.status}`)
@@ -552,15 +569,52 @@ export default function ChatPage() {
           flexShrink: 0,
         }}>
           <div style={{ maxWidth: 820, margin: '0 auto' }}>
+
+            {/* Attached media preview */}
+            {attachedMedia.length > 0 && (
+              <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem', flexWrap: 'wrap' }}>
+                 {attachedMedia.map(a => (
+                     <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(0,163,255,0.1)', padding: '0.4rem 0.6rem', borderRadius: 8, border: '1px solid rgba(0,163,255,0.2)'}}>
+                         {a.asset_type === 'image' && a.public_url ? (
+                             <img src={`${BASE}${a.public_url}`} style={{ width: 24, height: 24, borderRadius: 4, objectFit: 'cover' }} alt="" />
+                         ) : <ImageIcon size={16} color="#00A3FF" />}
+                         <span style={{ fontSize: '0.75rem', color: '#E2E8F0', maxWidth: 100, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{a.filename}</span>
+                         <button onClick={() => setAttachedMedia(prev => prev.filter(m => m.id !== a.id))} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8', display: 'flex' }}><X size={14}/></button>
+                     </div>
+                 ))}
+              </div>
+            )}
+
             <div style={{
               display: 'flex', gap: 10, alignItems: 'flex-end',
               background: 'rgba(15,23,42,0.6)',
               border: `1px solid ${loading ? 'rgba(0,163,255,0.4)' : 'rgba(255,255,255,0.06)'}`,
-              borderRadius: 16, padding: '0.5rem 0.5rem 0.5rem 1rem',
+              borderRadius: 16, padding: '0.5rem 0.5rem 0.5rem 0.5rem',
               backdropFilter: 'blur(12px)',
               transition: 'border-color 0.2s, box-shadow 0.2s',
               boxShadow: loading ? '0 0 20px rgba(0,163,255,0.1)' : 'none',
+              position: 'relative'
             }}>
+              {showAssetSelector && (
+                 <AssetSelector 
+                   onSelect={handleSelectAsset} 
+                   onClose={() => setShowAssetSelector(false)} 
+                   triggerRef={plusButtonRef} 
+                 />
+              )}
+              <button 
+                 ref={plusButtonRef}
+                 onClick={() => setShowAssetSelector(prev => !prev)}
+                 style={{
+                   width: 40, height: 40, borderRadius: 12, flexShrink: 0,
+                   background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)',
+                   display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+                   color: showAssetSelector ? '#33BAFF' : '#94A3B8',
+                   transition: 'all 0.2s',
+                   marginBottom: 2
+                 }}>
+                 <Plus size={18} />
+              </button>
               <textarea
                 ref={textareaRef}
                 id="chat-input"
@@ -575,6 +629,7 @@ export default function ChatPage() {
                   color: '#fff', fontSize: '0.9rem', lineHeight: 1.5, resize: 'none',
                   minHeight: 24, maxHeight: 120, fontFamily: 'inherit',
                   opacity: loading ? 0.5 : 1,
+                  marginBottom: 8
                 }}
                 onInput={e => {
                   const t = e.target as HTMLTextAreaElement
