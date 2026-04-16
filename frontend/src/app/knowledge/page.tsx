@@ -390,7 +390,7 @@ export default function KnowledgePage() {
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <InlineRename defaultName={item.data.filename} onSave={name => console.log('Rename media', item.data.id, name)} />
                           <div style={{ fontSize: '0.72rem', color: '#475569', marginTop: 3 }}>
-                            {item.data.asset_type.toUpperCase()} · {formatBytes(item.data.file_size_bytes)} · Used {item.data.usage_count}×
+                            {item.data.asset_type?.toUpperCase() || 'UNKNOWN'} · {item.data.file_size_bytes ? formatBytes(item.data.file_size_bytes) : '0B'} · Used {item.data.usage_count || 0}×
                           </div>
                         </div>
                         {/* Status pill */}
@@ -423,7 +423,7 @@ export default function KnowledgePage() {
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <InlineRename defaultName={item.data.title} onSave={name => console.log('Rename doc', item.data.id, name)} />
                           <div style={{ fontSize: '0.72rem', color: '#475569', marginTop: 3 }}>
-                            {item.data.source_type.toUpperCase()} · {item.data.category?.replace('_', ' ')} · {item.data.chunk_count} chunks
+                            {item.data.source_type?.toUpperCase() || 'UNKNOWN'} · {item.data.category?.replace('_', ' ')} · {item.data.chunk_count || 0} chunks
                           </div>
                         </div>
                         {/* Status */}
@@ -486,7 +486,7 @@ export default function KnowledgePage() {
                 <div style={{ marginBottom: '1rem' }}>
                   <InlineRename defaultName={selectedMedia.filename} onSave={name => console.log('Renamed', selectedMedia.id, name)} />
                   <div style={{ fontSize: '0.72rem', color: '#475569', marginTop: 6 }}>
-                    {selectedMedia.asset_type.toUpperCase()} · {formatBytes(selectedMedia.file_size_bytes)} · {selectedMedia.usage_count} uses
+                    {selectedMedia.asset_type?.toUpperCase() || 'UNKNOWN'} · {selectedMedia.file_size_bytes ? formatBytes(selectedMedia.file_size_bytes) : '0B'} · {selectedMedia.usage_count || 0} uses
                   </div>
                 </div>
 

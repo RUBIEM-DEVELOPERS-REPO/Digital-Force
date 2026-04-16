@@ -8,7 +8,7 @@ import logging
 from datetime import datetime
 from agent.state import AgentState
 from agent.llm import generate_json
-from agent.chat_push import chat_push
+from agent.chat_push import chat_push, agent_thought_push
 
 logger = logging.getLogger(__name__)
 
@@ -67,33 +67,25 @@ async def monitor_node(state: AgentState) -> dict:
 
     # Push meaningful updates to chat
     if is_complete:
-        await chat_push(
+        await agent_thought_push(
             user_id=user_id,
-            content=(
-                f"🎉 Campaign complete! All {total} tasks finished successfully. "
-                f"Check your Analytics dashboard for performance data."
-            ),
+            context=f"finalizing operations, all {total} tasks have successfully resolved. Campaign objectives achieved",
             agent_name="monitor",
             goal_id=goal_id,
             metadata=kpi_update,
         )
     elif is_failed:
-        await chat_push(
+        await agent_thought_push(
             user_id=user_id,
-            content=(
-                f"🚨 Campaign stalled — {fail}/{total} tasks failed. "
-                f"{'Replanning strategy now...' if needs_replan else 'Review your platform connections in Settings.'}"
-            ),
+            context=f"detecting critical stall, {fail}/{total} tasks failed. Initializing contingency protocols",
             agent_name="monitor",
             goal_id=goal_id,
             metadata=kpi_update,
         )
     elif needs_replan:
-        await chat_push(
+        await agent_thought_push(
             user_id=user_id,
-            content=(
-                f"🔄 {replan_reason} Dispatching Strategist to adjust the plan..."
-            ),
+            context=f"identified a strategy breakdown: {replan_reason}. Sending directives to Strategist to route a new plan",
             agent_name="monitor",
             goal_id=goal_id,
             metadata=kpi_update,
@@ -101,12 +93,9 @@ async def monitor_node(state: AgentState) -> dict:
     else:
         # Periodic progress update (only push if something is actually happening)
         if done > 0:
-            await chat_push(
+            await agent_thought_push(
                 user_id=user_id,
-                content=(
-                    f"📊 Progress: {done}/{total} tasks complete ({progress_pct:.0f}%). "
-                    f"{pending} still running."
-                ),
+                context=f"evaluating metrics: {done}/{total} tasks complete ({progress_pct:.0f}%). {pending} tasks remain active in queue",
                 agent_name="monitor",
                 goal_id=goal_id,
                 metadata=kpi_update,

@@ -88,71 +88,7 @@ When using Playwright:
 Write clean, production-ready Python. No placeholder code."""
 
 
-# ─── E2B Sandbox ─────────────────────────────────────────────────────────────
-
-def _is_playwright_skill(code: str) -> bool:
-    """Detect if the generated skill uses Playwright."""
-    return "playwright" in code.lower() or "async_playwright" in code
-
-
-async def _run_in_e2b(code: str, function_name: str, test_args: dict) -> dict:
-    """
-    Execute generated code in E2B cloud sandbox.
-    Auto-detects Playwright usage and installs Chromium in the sandbox if needed.
-    The sandbox is remote and isolated — nothing touches the local machine.
-    """
-    if not settings.e2b_api_key:
-        logger.warning("[SkillForge] E2B not configured. Running in restricted local mode.")
-        return await _run_local_test(code, function_name, test_args)
-
-    uses_playwright = _is_playwright_skill(code)
-
-    try:
-        from e2b_code_interpreter import Sandbox
-        async with Sandbox(api_key=settings.e2b_api_key) as sbx:
-            # ── Base dependency install ──────────────────────────────────────
-            await sbx.commands.run("pip install httpx requests beautifulsoup4 -q")
-
-            # ── Playwright: install + download Chromium inside the sandbox ───
-            if uses_playwright:
-                logger.info("[SkillForge] Playwright skill detected — installing Chromium in E2B sandbox...")
-                # This runs INSIDE the cloud sandbox — zero local disk usage
-                install_result = await sbx.commands.run(
-                    "pip install playwright -q && playwright install chromium --with-deps -q"
-                )
-                logger.info(f"[SkillForge] Playwright sandbox ready: {install_result.stdout[-200:] if hasattr(install_result, 'stdout') else 'ok'}")
-
-            # ── Build the test runner ────────────────────────────────────────
-            test_code = f"""import asyncio
-{code}
-
-async def _test():
-    result = await {function_name}(**{json.dumps(test_args)})
-    print("RESULT:", result)
-    return result
-
-asyncio.run(_test())
-"""
-            result = await sbx.run_code(test_code)
-            output = result.text or ""
-            success = "RESULT:" in output and "'success': False" not in output and "error" not in output.lower()
-            sandbox_type = "e2b_playwright" if uses_playwright else "e2b_standard"
-            return {"success": success, "output": output, "sandbox": sandbox_type}
-    except Exception as e:
-        logger.error(f"[SkillForge] E2B execution failed: {e}")
-        return {"success": False, "error": str(e)}
-
-
-async def _run_local_test(code: str, function_name: str, test_args: dict) -> dict:
-    """
-    Restricted local test — validates syntax only when E2B unavailable.
-    """
-    import ast
-    try:
-        ast.parse(code)
-        return {"success": True, "output": "Syntax valid (local mode)", "sandbox": "local_syntax_check"}
-    except SyntaxError as e:
-        return {"success": False, "error": f"Syntax error: {e}"}
+# Imported run_in_e2b from agent.tools.sandbox
 
 
 # ─── Main SkillForge Node ────────────────────────────────────────────────────
@@ -165,7 +101,7 @@ async def skillforge_node(state: AgentState) -> dict:
     """
     from agent.tools.web_search import search_for_solution
     from agent.skills.registry import save_skill_metadata, skills_for_task, run_skill
-    from agent.chat_push import chat_push
+    from agent.chat_push import chat_push, agent_thought_push
 
     logger.info(f"[SkillForge] Checking for skill gaps in goal {state['goal_id']}")
 
@@ -194,9 +130,12 @@ async def skillforge_node(state: AgentState) -> dict:
                         # Clear the failed task
                         user_id = state.get("created_by")
                         if user_id:
-                            await chat_push(user_id,
-                                f"♻️ I found an existing capability ('{skill_name}') that resolves the issue. Retrying tasks now.",
-                                "skillforge", state.get("goal_id"))
+                            await agent_thought_push(
+                                user_id=user_id,
+                                context=f"discovered and deploying an existing neural capability '{skill_name}' to resolve the execution failure",
+                                agent_name="skillforge",
+                                goal_id=state.get("goal_id")
+                            )
                         current_failed = list(state.get("failed_task_ids", []))
                         fixed = [t for t in current_failed if t != task.get("id")]
                         return {
@@ -332,9 +271,24 @@ Risk level:
 
     # ── Step 4: Generate the skill code (with web solution as context) ────────
     use_playwright = api_check.get("use_playwright", False)
+    
+    # Check if any failing task has injected web credentials from Publisher GUI Fallback
+    creds_injected = ""
+    for ft in failed_task_details:
+        if ft.get("web_username") and ft.get("web_password"):
+            creds_injected = f"""
+AVAILABLE WEB CREDENTIALS TO USE IN LOGIN FORM:
+username: {ft.get('web_username')}
+password: {ft.get('web_password')}
+IMPORTANT: You MUST physically use page.fill() or page.type() to input these credentials into the platform's login view before publishing.
+"""
+            use_playwright = True
+            break
+
     playwright_hint = (
         "\n\nIMPORTANT: Use Playwright (headless Chromium browser) for this skill — no API is available. "
         "The sandbox has Playwright installed. Use `from playwright.async_api import async_playwright` inside the function."
+        + creds_injected
     ) if use_playwright else ""
 
     code_prompt = f"""
@@ -356,7 +310,17 @@ Return a dict with a "success" key always.{playwright_hint}
     clean_code = code_match.group(1) if code_match else raw_code
 
     # ── Step 5: Test in sandbox ───────────────────────────────────────────────
-    test_result = await _run_in_e2b(clean_code, skill_name, skill_spec.get("test_args", {}))
+    from agent.tools.sandbox import run_in_e2b
+    
+    # Show the code we are about to run in chat!
+    if user_id:
+        await chat_push(
+            user_id,
+            f"💻 Built Neural Capability [{skill_name}]. Executing logic stack in Sandbox:\n```python\n{clean_code}\n```",
+            "skillforge", state.get("goal_id")
+        )
+        
+    test_result = await run_in_e2b(clean_code, skill_name, skill_spec.get("test_args", {}))
 
     new_skills = state.get("new_skills_created", [])
 
@@ -381,14 +345,13 @@ Return a dict with a "success" key always.{playwright_hint}
 
         user_id = state.get("created_by")
 
-        if risk_level in ["low", "medium"]:
-            msg = (
-                f"🔧 I hit a roadblock, searched the web for a solution, and built a new capability: "
-                f"**{skill_spec.get('display_name', skill_name)}**. {summary} "
-                f"I've tested it and it's working. Retrying the tasks now."
-            )
             if user_id:
-                await chat_push(user_id, msg, "skillforge", state.get("goal_id"))
+                await agent_thought_push(
+                    user_id=user_id,
+                    context=f"successfully forged and sandbox-tested new neural capability '{skill_spec.get('display_name', skill_name)}', applying it to fix the failing tasks",
+                    agent_name="skillforge",
+                    goal_id=state.get("goal_id")
+                )
 
             current_failed = state.get("failed_task_ids", [])
             fixed_failed = [t for t in current_failed if t not in [ft.get("id") for ft in failed_task_details]]
@@ -396,45 +359,19 @@ Return a dict with a "success" key always.{playwright_hint}
             return {
                 "new_skills_created": new_skills + [skill_name],
                 "failed_task_ids": fixed_failed,
-                "messages": [{"role": "skillforge", "content": f"Auto-applied fix via new skill: {skill_name}"}],
+                "messages": [{"role": "skillforge", "content": f"Auto-applied fix via new skill (including high-risk): {skill_name}"}],
                 "next_agent": "publisher",
             }
-        else:
-            msg = (
-                f"⚠️ I researched and built a fix for the roadblock: "
-                f"**{skill_spec.get('display_name', skill_name)}**. {summary} "
-                f"This is a **HIGH RISK** operation — I need your go-ahead before I apply it. "
-                f"Reply 'approve' to proceed, or 'skip' to drop these tasks."
-            )
-            if user_id:
-                await chat_push(user_id, msg, "skillforge", state.get("goal_id"))
-                # Also email for high-risk
-                from agent.tools.email_notify import notify_high_risk_approval
-                await notify_high_risk_approval(
-                    action_description=skill_spec.get("display_name", skill_name),
-                    risk_reason=summary,
-                    skill_name=skill_name,
-                )
-
-            from langgraph.graph import END
-            return {
-                "new_skills_created": new_skills + [skill_name],
-                "messages": [{"role": "skillforge", "content": f"Paused — awaiting approval for: {skill_name}"}],
-                "next_agent": END,
-            }
-
     else:
         # Sandbox test failed
         logger.warning(f"[SkillForge] Validation failed: {test_result.get('error')}")
         user_id = state.get("created_by")
         if user_id:
-            await chat_push(
-                user_id,
-                f"⚠️ I found a solution online and wrote code to fix the issue, but the code failed testing. "
-                f"Error: {test_result.get('error', 'unknown')}. "
-                f"I'll log this and the Monitor will decide next steps.",
-                "skillforge",
-                state.get("goal_id"),
+            await agent_thought_push(
+                user_id=user_id,
+                context=f"engineered a solution based on web research but it crashed during sandbox validation, halting for monitor review",
+                agent_name="skillforge",
+                goal_id=state.get("goal_id")
             )
         return {
             "messages": [{"role": "skillforge", "content": "Skill validation failed after web-informed attempt."}],

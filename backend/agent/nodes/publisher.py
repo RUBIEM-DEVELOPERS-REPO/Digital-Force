@@ -8,7 +8,7 @@ import logging
 import httpx
 from datetime import datetime
 from agent.state import AgentState
-from agent.chat_push import chat_push
+from agent.chat_push import chat_push, agent_thought_push
 from config import get_settings
 
 logger = logging.getLogger(__name__)
@@ -136,9 +136,9 @@ async def publisher_node(state: AgentState) -> dict:
             "messages": [{"role": "publisher", "content": "No pending publish tasks."}]
         }
 
-    await chat_push(
+    await agent_thought_push(
         user_id=user_id,
-        content=f"📤 Publishing {len(publish_tasks)} post(s) to your platforms...",
+        context=f"initiating the network publishing sequence for {len(publish_tasks)} queued payloads",
         agent_name="publisher",
         goal_id=goal_id,
     )
@@ -184,20 +184,37 @@ async def publisher_node(state: AgentState) -> dict:
                         pass
 
                 if not skill_result or not skill_result.get("success"):
-                    # Fall back to simulation
+                    # ── Autonomous GUI Fallback ──────
+                    # Instead of simulating, fail the task and inject web credentials
+                    # so SkillForge knows to hallucinate a Playwright navigation script.
+                    from database import async_session, PlatformConnection
+                    from sqlalchemy import select
+                    web_user, web_pass = None, None
+                    try:
+                        async with async_session() as session:
+                            stmt = select(PlatformConnection).where(PlatformConnection.platform == platform)
+                            conn = (await session.execute(stmt)).scalar_one_or_none()
+                            if conn:
+                                web_user = conn.web_username
+                                web_pass = conn.web_password_encrypted
+                    except Exception as e:
+                        logger.error(f"[Publisher] Failed to fetch web credentials: {e}")
+                    
+                    cred_status = "Web credentials injected." if web_user else "User must add web credentials in Settings."
                     result = {
-                        "success": True,
-                        "platform_post_id": f"sim_{platform}_{datetime.utcnow().timestamp():.0f}",
-                        "simulation": True,
+                        "success": False,
+                        "error": f"API publishing unavailable. FATAL. Require SkillForge to deploy Playwright headless browser for GUI fallback. {cred_status}",
+                        "web_username": web_user,
+                        "web_password": web_pass
                     }
-                    logger.info(f"[Publisher] SIMULATION: Would post to {platform}: {full_text[:80]}...")
+                    logger.info(f"[Publisher] API failed for {platform}. Routing to SkillForge for Headless GUI fallback.")
 
             if result["success"]:
                 newly_completed.append(task.get("id", ""))
                 sim_note = " (simulated — connect platforms in Settings)" if result.get("simulation") else ""
-                await chat_push(
+                await agent_thought_push(
                     user_id=user_id,
-                    content=f"✅ Published to **{platform.capitalize()}**{sim_note}: \"{caption[:60]}...\"",
+                    context=f"successfully published payload to {platform}{sim_note}",
                     agent_name="publisher",
                     goal_id=goal_id,
                     metadata={"platform": platform, "post_id": result.get("platform_post_id")},
@@ -205,9 +222,13 @@ async def publisher_node(state: AgentState) -> dict:
                 messages.append({"role": "publisher", "content": f"✅ Posted to {platform}: {caption[:50]}..."})
             else:
                 newly_failed.append(task.get("id", ""))
-                await chat_push(
+                task["error"] = result.get('error', 'Unknown error')
+                if "web_username" in result:
+                    task["web_username"] = result["web_username"]
+                    task["web_password"] = result["web_password"]
+                await agent_thought_push(
                     user_id=user_id,
-                    content=f"❌ Failed to publish to **{platform.capitalize()}**: {result.get('error', 'Unknown error')}",
+                    context=f"encountered a critical transmission error while attempting to publish to {platform}",
                     agent_name="publisher",
                     goal_id=goal_id,
                 )
@@ -218,6 +239,7 @@ async def publisher_node(state: AgentState) -> dict:
             newly_failed.append(task.get("id", ""))
 
     return {
+        "tasks": tasks,  # Return updated tasks with error strings 
         "completed_task_ids": list(completed) + newly_completed,
         "failed_task_ids": list(failed) + newly_failed,
         "messages": messages,

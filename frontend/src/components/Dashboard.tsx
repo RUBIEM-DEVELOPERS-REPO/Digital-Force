@@ -20,6 +20,7 @@ interface Goal {
   tasks_completed: number
   platforms: string[]
   created_at: string
+  latest_activity?: string
 }
 
 const STATUS_CONFIG: Record<string, { label: string; cls: string; icon: React.ElementType }> = {
@@ -68,9 +69,9 @@ export default function Dashboard() {
                 Autonomous Digital Media Intelligent Agency
               </p>
             </div>
-            <Link href="/goals/new" className="btn-primary">
+              <Link href="/goals/new" className="btn-primary">
               <Plus size={16} />
-              Deploy Directive
+              Deploy Task
             </Link>
           </div>
         </div>
@@ -99,7 +100,7 @@ export default function Dashboard() {
         {/* Stats Row */}
         <div className="grid grid-cols-3 gap-5 mb-8 stagger-children">
           {[
-            { label: 'Active Directives', value: activeGoals.length, icon: Target, color: '#00A3FF', glow: 'rgba(0,163,255,0.15)' },
+            { label: 'Active Tasks', value: activeGoals.length, icon: Target, color: '#00A3FF', glow: 'rgba(0,163,255,0.15)' },
             { label: 'Awaiting Authorization', value: awaiting.length, icon: AlertCircle, color: '#FCD34D', glow: 'rgba(245,158,11,0.15)' },
             { label: 'Total Operations', value: goals.length, icon: Zap, color: '#34D399', glow: 'rgba(16,185,129,0.15)' },
           ].map((stat, i) => (
@@ -119,7 +120,7 @@ export default function Dashboard() {
         {/* Active Goals */}
         <div className="mb-8">
           <div className="flex items-center justify-between mb-5">
-            <h2 className="font-semibold text-white tracking-wide">Active Directives</h2>
+            <h2 className="font-semibold text-white tracking-wide">Active Tasks</h2>
             <Link href="/goals" className="btn-ghost text-xs font-semibold uppercase tracking-wider">
               View all <ArrowRight size={13} />
             </Link>
@@ -139,13 +140,13 @@ export default function Dashboard() {
                    style={{ background: 'rgba(0,163,255,0.1)', border: '1px solid rgba(0,163,255,0.2)' }}>
                 <Target size={32} className="text-primary-400" />
               </div>
-              <h3 className="text-lg font-bold text-white mb-2">No Active Directives</h3>
+              <h3 className="text-lg font-bold text-white mb-2">No Active Tasks</h3>
               <p className="text-sm mb-8 max-w-sm" style={{ color: '#94A3B8' }}>
-                Deploy a new autonomous directive and watch the neural agents synthesize a strategy.
+                Deploy a new autonomous task and watch the neural agents synthesize a strategy.
               </p>
               <Link href="/goals/new" className="btn-primary px-6 py-3">
                 <Plus size={16} />
-                Deploy First Directive
+                Deploy First Task
               </Link>
             </div>
           ) : (
@@ -158,7 +159,10 @@ export default function Dashboard() {
                         style={{ animationDelay: `${i * 50}ms` }}>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-3 mb-3">
-                        <span className={s.cls} style={{ padding: '0.35rem 0.75rem' }}><s.icon size={12} />{s.label}</span>
+                        <span className={s.cls} style={{ padding: '0.35rem 0.75rem', maxWidth: 200, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          <s.icon size={12} className="inline mr-1" />
+                          {goal.latest_activity || s.label}
+                        </span>
                         <span className="text-xs font-medium uppercase tracking-wider text-slate-500">
                           {goal.tasks_completed}/{goal.tasks_total} operations
                         </span>
@@ -186,7 +190,7 @@ export default function Dashboard() {
           <h2 className="font-semibold text-white tracking-wide mb-5">Command Protocols</h2>
           <div className="grid grid-cols-3 gap-5">
             {[
-              { href: '/goals/new',  icon: Target,    title: 'Deploy Directive',   desc: 'Initialize autonomous campaign',  color: '#00A3FF' },
+              { href: '/goals/new',  icon: Target,    title: 'Deploy Task',   desc: 'Initialize autonomous campaign',  color: '#00A3FF' },
               { href: '/knowledge',  icon: Network,   title: 'Knowledge Core',     desc: 'Inject text & media assets',      color: '#22D3EE' },
               { href: '/skills',     icon: Cpu,       title: 'SkillForge',         desc: 'Upgrade neural capabilities',     color: '#10B981' },
             ].map(({ href, icon: Icon, title, desc, color }) => (

@@ -33,27 +33,66 @@ async def chat_stream(
     user: dict = Depends(get_current_user),
 ):
     """
-    Stream a natural language conversation with the Digital Force agency.
-    Returns SSE with typed chunks:
-      { type: "thinking" | "action" | "bubble_start" | "message" | "bubble_end" | "error" | "done",
-        content: str, bubble_id?: str }
+    Pass the message directly to the LangGraph execution graph.
+    The graph's nodes (like Executive) will push real-time responses to the DB,
+    which the frontend polls.
     """
+    user_id = user.get("sub", "unknown")
+    
+    # 1. Save user message to DB
+    from database import ChatMessage
+    import uuid
+    msg_db = ChatMessage(
+        id=str(uuid.uuid4()),
+        user_id=user_id,
+        role="user",
+        content=body.message
+    )
+    db.add(msg_db)
+    await db.commit()
 
     async def generate():
         try:
-            from agent.chat_agent import handle_chat_message
-            async for chunk in handle_chat_message(
-                message=body.message,
-                context=body.context or {},
-                user_id=user.get("sub", "unknown"),
-            ):
-                yield f"data: {json.dumps(chunk)}\n\n"
-                await asyncio.sleep(0)
+            yield f"data: {json.dumps({'type': 'action', 'content': 'Transmitting to Digital Force...'})}\\n\\n"
+            await asyncio.sleep(0.1)
+
+            # 2. Build AgentState
+            from agent.graph import execution_graph
+            
+            # Fetch goals or context if any
+            from database import Goal
+            active_goals_query = select(Goal).where(
+                Goal.created_by == user_id,
+                Goal.status.in_(["planning", "executing", "awaiting_approval", "monitoring"])
+            ).order_by(desc(Goal.created_at)).limit(1)
+            active_goals_result = await db.execute(active_goals_query)
+            active_goal = active_goals_result.scalar_one_or_none()
+            
+            # We want to pull recent history as well
+            hist_result = await db.execute(
+                select(ChatMessage)
+                .where(ChatMessage.user_id == user_id)
+                .order_by(desc(ChatMessage.created_at)).limit(10)
+            )
+            hist = hist_result.scalars().all()
+            hist_msgs = [{"role": m.role, "content": m.content} for m in reversed(hist)]
+            
+            initial_state = {
+                "created_by": user_id,
+                "goal_id": active_goal.id if active_goal else None,
+                "messages": hist_msgs,
+                "tasks": [],
+                "platforms": [],
+            }
+            
+            # Launch graph in background so we don't block the HTTP request returning 
+            # and the UI can immediately resume polling.
+            asyncio.create_task(execution_graph.ainvoke(initial_state))
+            
+            yield f"data: {json.dumps({'type': 'done', 'content': ''})}\\n\\n"
         except Exception as e:
             logger.error(f"[Chat] Stream error: {e}")
-            yield f"data: {json.dumps({'type': 'error', 'content': str(e)})}\n\n"
-        finally:
-            yield f"data: {json.dumps({'type': 'done', 'content': ''})}\n\n"
+            yield f"data: {json.dumps({'type': 'error', 'content': str(e)})}\\n\\n"
 
     return StreamingResponse(
         generate(),
@@ -119,7 +158,17 @@ async def get_chat_updates(
         Goal.status.in_(["planning", "executing", "awaiting_approval", "monitoring"])
     ).limit(1)
     active_goals_result = await db.execute(active_goals_query)
-    agents_active = active_goals_result.first() is not None
+    active_goal = active_goals_result.scalar_one_or_none()
+    agents_active = active_goal is not None
+
+    current_activity = None
+    if active_goal:
+        from database import AgentLog
+        from sqlalchemy import desc
+        log_res = await db.execute(select(AgentLog).where(AgentLog.goal_id == active_goal.id).order_by(desc(AgentLog.created_at)).limit(1))
+        latest_log = log_res.scalar_one_or_none()
+        if latest_log:
+            current_activity = f"{latest_log.agent.upper()}: {latest_log.thought}"
 
     # 2. Fetch new agent messages
     query = (
@@ -143,6 +192,7 @@ async def get_chat_updates(
 
     return {
         "agents_active": agents_active,
+        "current_activity": current_activity,
         "messages": [
             {
                 "id": m.id,

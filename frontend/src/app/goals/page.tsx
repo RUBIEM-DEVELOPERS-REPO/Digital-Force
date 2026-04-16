@@ -32,6 +32,7 @@ interface Goal {
   id: string; title: string; status: string; priority: string
   progress_percent: number; tasks_total: number; tasks_completed: number
   platforms: string[]; created_at: string; deadline?: string
+  latest_activity?: string
 }
 
 const stagger = {
@@ -39,7 +40,7 @@ const stagger = {
   item: { hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0, transition: { duration: 0.38, ease: [0.4,0,0.2,1] } } },
 }
 
-export default function DirectivesPage() {
+export default function TasksPage() {
   const [goals, setGoals] = useState<Goal[]>([])
   const [loading, setLoading] = useState(true)
   const [statusFilter, setStatusFilter] = useState('')
@@ -71,7 +72,7 @@ export default function DirectivesPage() {
                   DIGITAL FORCE — OPERATIONS
                 </div>
                 <h1 style={{ fontSize: '2.5rem', fontWeight: 900, letterSpacing: '-0.035em', background: 'linear-gradient(180deg, #FFFFFF 0%, #94A3B8 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', lineHeight: 1.1, marginBottom: '0.625rem' }}>
-                  Directives
+                  Tasks
                 </h1>
                 <p style={{ fontSize: '0.875rem', color: '#475569' }}>
                   {goals.length} total operation{goals.length !== 1 ? 's' : ''} · {goals.filter(g => ['executing','monitoring','planning'].includes(g.status)).length} active
@@ -86,7 +87,7 @@ export default function DirectivesPage() {
                 boxShadow: '0 8px 32px rgba(0,163,255,0.35)',
                 textDecoration: 'none', letterSpacing: '0.03em',
               }}>
-                <Plus size={16} /> Deploy Directive
+                <Plus size={16} /> Deploy Task
               </Link>
             </div>
           </motion.div>
@@ -125,13 +126,13 @@ export default function DirectivesPage() {
               <div style={{ width: 64, height: 64, borderRadius: '1.125rem', background: 'rgba(0,163,255,0.08)', border: '1px solid rgba(0,163,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.25rem' }}>
                 <Target size={28} style={{ color: '#00A3FF' }} />
               </div>
-              <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: '#475569', marginBottom: '0.5rem' }}>No directives found</h3>
+              <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: '#475569', marginBottom: '0.5rem' }}>No tasks found</h3>
               <p style={{ fontSize: '0.82rem', color: '#334155', marginBottom: '1.75rem' }}>
-                {statusFilter ? 'No operations match this filter' : 'Deploy your first autonomous directive to begin'}
+                {statusFilter ? 'No operations match this filter' : 'Deploy your first autonomous task to begin'}
               </p>
               {!statusFilter && (
                 <Link href="/goals/new" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '0.75rem 1.75rem', borderRadius: '0.875rem', background: 'linear-gradient(135deg, #00A3FF, #006199)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', fontSize: '0.875rem', fontWeight: 700, textDecoration: 'none', boxShadow: '0 8px 32px rgba(0,163,255,0.35)' }}>
-                  <Plus size={15} /> Deploy First Directive
+                  <Plus size={15} /> Deploy First Task
                 </Link>
               )}
             </div>
@@ -161,8 +162,9 @@ export default function DirectivesPage() {
 
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.75rem' }}>
-                            <span className={s.cls} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: '0.72rem' }}>
-                              <StatusIcon size={11} />{s.label}
+                            <span className={s.cls} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: '0.72rem', maxWidth: 350, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              <StatusIcon size={11} style={{ flexShrink: 0 }} />
+                              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{goal.latest_activity || s.label}</span>
                             </span>
                             {goal.platforms.slice(0, 4).map(p => (
                               <span key={p} style={{ fontSize: '0.65rem', fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: 'rgba(255,255,255,0.05)', color: '#64748B', letterSpacing: '0.04em' }}>

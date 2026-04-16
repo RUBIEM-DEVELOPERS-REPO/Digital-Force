@@ -58,7 +58,7 @@ async def send_agent_email(
     msg["Reply-To"] = EMAIL_FROM  # Replies come back to the FROM inbox for IMAP polling
 
     msg.attach(MIMEText(body_text, "plain"))
-    html = body_html or _auto_html(subject, body_text, approval_token)
+    html = body_html or f"<html><body><pre>{body_text}</pre></body></html>"
     msg.attach(MIMEText(html, "html"))
 
     try:
@@ -80,60 +80,40 @@ def _smtp_send(msg: MIMEMultipart, recipient: str):
         server.sendmail(EMAIL_FROM, recipient, msg.as_string())
 
 
-def _auto_html(subject: str, text: str, token: Optional[str] = None) -> str:
-    paragraphs = "".join(
-        f"<p style='margin:0 0 12px;line-height:1.6;color:rgba(255,255,255,0.75);'>{line}</p>"
-        for line in text.split("\n") if line.strip()
-    )
-    reply_hint = ""
-    if token:
-        reply_hint = """
-        <div style='margin-top:24px;padding:16px;border-radius:12px;background:rgba(124,58,237,0.12);border:1px solid rgba(124,58,237,0.25);'>
-          <p style='margin:0 0 8px;font-weight:600;color:#A78BFA;font-size:0.9rem;'>💬 How to respond</p>
-          <p style='margin:0;color:rgba(255,255,255,0.6);font-size:0.85rem;'>
-            Simply <strong style='color:#fff;'>reply to this email</strong> with one of:
-            <br><br>
-            &nbsp;&nbsp;✅ <strong>approve</strong> — to authorise and execute<br>
-            &nbsp;&nbsp;❌ <strong>skip</strong> — to drop this task<br>
-            <br>
-            Or open your <a href='http://localhost:3000/chat' style='color:#A78BFA;'>Digital Force dashboard</a> and respond in chat.
-          </p>
-        </div>
-        """
+async def _generate_neural_email(context: str, user_id: str, token: Optional[str] = None) -> dict:
+    from agent.llm import generate_json
+    try:
+        from database import async_session, AgencySettings
+        from sqlalchemy import select
+        async with async_session() as session:
+            stmt = select(AgencySettings.agent_tone).where(AgencySettings.user_id == user_id)
+            tone = (await session.execute(stmt)).scalar_one_or_none() or "Professional"
+    except Exception:
+        tone = "Professional"
 
-    return f"""<!DOCTYPE html>
-<html><head><meta charset="utf-8"></head>
-<body style="margin:0;padding:0;background:#0d0d1a;font-family:Inter,Arial,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0">
-    <tr><td align="center" style="padding:40px 20px;">
-      <table width="600" cellpadding="0" cellspacing="0"
-        style="background:#13131f;border-radius:16px;border:1px solid rgba(255,255,255,0.08);overflow:hidden;">
-        <tr>
-          <td style="padding:28px 32px;background:linear-gradient(135deg,#7C3AED22,#22D3EE11);
-            border-bottom:1px solid rgba(255,255,255,0.06);">
-            <span style="font-size:1.1rem;font-weight:700;color:#fff;">⚡ Digital Force</span>
-            <span style="font-size:0.75rem;color:rgba(255,255,255,0.35);margin-left:10px;">Autonomous Agency</span>
-          </td>
-        </tr>
-        <tr>
-          <td style="padding:32px;">
-            <h2 style="margin:0 0 20px;font-size:1.1rem;font-weight:600;color:#fff;">{subject}</h2>
-            {paragraphs}
-            {reply_hint}
-          </td>
-        </tr>
-        <tr>
-          <td style="padding:16px 32px;border-top:1px solid rgba(255,255,255,0.06);">
-            <p style="margin:0;font-size:0.72rem;color:rgba(255,255,255,0.2);">
-              Sent autonomously by your Digital Force agents.
-              {f"Reference: {token}" if token else ""}
-            </p>
-          </td>
-        </tr>
-      </table>
-    </td></tr>
-  </table>
-</body></html>"""
+    system = f"You are the autonomous Digital Force AI. Tone: {tone}. Craft an elite, responsive HTML email for a client."
+    prompt = f"""
+CONTEXT TO COMMUNICATE:
+{context}
+
+{'IMPORTANT: They must reply to this email with "approve" or "skip" (reference token: ' + token + '). Highlight this.' if token else ''}
+
+Return JSON ONLY:
+{{
+  "subject": "Engaging subject line",
+  "text": "Plain text version",
+  "html": "Aesthetically pleasing HTML email. Use inline CSS, dark theme (#0d0d1a bg), and modern fonts (Inter/sans-serif). Keep it professional but highly elite."
+}}
+"""
+    try:
+        return await generate_json(prompt, system)
+    except Exception as e:
+        logger.error(f"Neural email generation failed: {e}")
+        return {
+            "subject": "Digital Force Notification",
+            "text": context,
+            "html": f"<html><body><p>{context}</p></body></html>"
+        }
 
 
 # ─── Specialised helpers ──────────────────────────────────────────────────────
@@ -166,28 +146,14 @@ async def notify_api_key_needed(
     Notify about a missing API credential.
     Returns the approval token (stored in DB by caller).
     """
-    to_email = await _get_user_email(user_id)
-    
-    free_note = "✅ Free tier available — no credit card needed." if is_free else "⚠️ May require a paid plan — check pricing before signing up."
-    subject = f"Action Required: API Key Needed for {capability}"
-    body = f"""Your Digital Force agents want to unlock a new capability but need a credential.
-
-Capability: {capability}
-
-Why this is needed:
-{why_needed}
-
-API / Service: {api_name}
-{free_note}
-Sign up: {signup_url}
-
-Once you have the key, add it in your dashboard under Settings → Integrations.
-Your agents will automatically retry the stalled task.
-
-— Your Digital Force Agents"""
-
     token = str(uuid.uuid4())[:8].upper()
-    await send_agent_email(subject, body, approval_token=token, to_email=to_email)
+    email_data = await _generate_neural_email(
+        context=f"We need an API credential ({api_name}) to execute: {capability}. Why: {why_needed}. Is free: {is_free}. Sign up URL: {signup_url}. Tell them to add the key in Settings -> Integrations so we can retry automatically.",
+        user_id=user_id,
+        token=token
+    )
+    
+    await send_agent_email(email_data["subject"], email_data["text"], email_data["html"], approval_token=token, to_email=to_email)
     return token
 
 
@@ -201,27 +167,13 @@ async def notify_high_risk_approval(
     """
     Email user for high-risk approval. Returns the token stored in PendingEmailApproval.
     """
-    to_email = await _get_user_email(user_id)
-    
-    subject = f"Approval Required: {action_description}"
-    body = f"""Your Digital Force agents have built a fix for a roadblock but need your green light.
-
-Action: {action_description}
-
-Why this needs your approval:
-{risk_reason}
-
-Skill built: {skill_name}
-
-Reply to this email with:
-  approve — to authorise and execute
-  skip — to drop this task
-
-Or respond in your Digital Force chat dashboard.
-
-— Your Digital Force Agents"""
-
     token = str(uuid.uuid4())[:8].upper()
+    
+    email_data = await _generate_neural_email(
+        context=f"We built a high-risk fix ({skill_name}) for a roadblock. Action: {action_description}. Risk reason: {risk_reason}. We need their explicit approval to execute.",
+        user_id=user_id,
+        token=token
+    )
 
     # Store in DB so inbox poller can match replies
     try:
@@ -242,7 +194,7 @@ Or respond in your Digital Force chat dashboard.
     except Exception as e:
         logger.error(f"[Email] Could not store pending approval: {e}")
 
-    await send_agent_email(subject, body, approval_token=token, to_email=to_email)
+    await send_agent_email(email_data["subject"], email_data["text"], email_data["html"], approval_token=token, to_email=to_email)
     return token
 
 
@@ -253,20 +205,9 @@ async def notify_campaign_complete(
     user_id: str = "",
 ) -> bool:
     to_email = await _get_user_email(user_id)
-    
-    subject = f"Campaign Complete: {campaign_title}"
-    metrics_text = "\n".join([f"  • {k}: {v}" for k, v in metrics.items()]) or "  No metrics recorded yet."
-    body = f"""Your campaign has finished.
-
-Campaign: {campaign_title}
-
-Summary:
-{summary}
-
-Results:
-{metrics_text}
-
-Check your Digital Force dashboard for full analytics.
-
-— Your Digital Force Agents"""
-    return await send_agent_email(subject, body, to_email=to_email)
+    metrics_text = ", ".join([f"{k}: {v}" for k, v in metrics.items()]) or "No metrics"
+    email_data = await _generate_neural_email(
+        context=f"The campaign '{campaign_title}' has completed! Summary: {summary}. Metrics: {metrics_text}. Tell the user to check their dashboard.",
+        user_id=user_id
+    )
+    return await send_agent_email(email_data["subject"], email_data["text"], email_data["html"], to_email=to_email)

@@ -221,15 +221,25 @@ async def list_goals(
     user: dict = Depends(get_current_user),
 ):
     result = await db.execute(select(Goal).order_by(desc(Goal.created_at)).limit(50))
-    goals = result.scalars().all()
-    return [{
-        "id": g.id, "title": g.title, "status": g.status,
-        "priority": g.priority, "progress_percent": g.progress_percent,
-        "tasks_total": g.tasks_total, "tasks_completed": g.tasks_completed,
-        "platforms": json.loads(g.platforms or "[]"),
-        "created_at": g.created_at.isoformat(),
-        "deadline": g.deadline.isoformat() if g.deadline else None,
-    } for g in goals]
+    returns = []
+    for g in goals:
+        latest_activity = None
+        if g.status in ["planning", "executing", "monitoring"]:
+            log_res = await db.execute(select(AgentLog).where(AgentLog.goal_id == g.id).order_by(desc(AgentLog.created_at)).limit(1))
+            log = log_res.scalar_one_or_none()
+            if log:
+                latest_activity = f"{log.agent.upper()}: {log.thought}"
+                
+        returns.append({
+            "id": g.id, "title": g.title, "status": g.status,
+            "priority": g.priority, "progress_percent": g.progress_percent,
+            "tasks_total": g.tasks_total, "tasks_completed": g.tasks_completed,
+            "platforms": json.loads(g.platforms or "[]"),
+            "created_at": g.created_at.isoformat(),
+            "deadline": g.deadline.isoformat() if g.deadline else None,
+            "latest_activity": latest_activity,
+        })
+    return returns
 
 
 @router.get("/{goal_id}")
@@ -267,6 +277,7 @@ async def get_goal(
         "created_at": goal.created_at.isoformat(),
         "deadline": goal.deadline.isoformat() if goal.deadline else None,
         "approved_at": goal.approved_at.isoformat() if goal.approved_at else None,
+        "latest_activity": f"{logs[0]['agent'].upper()}: {logs[0]['thought']}" if logs else None,
     }
 
 

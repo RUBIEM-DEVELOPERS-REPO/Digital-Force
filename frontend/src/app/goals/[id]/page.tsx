@@ -146,7 +146,7 @@ export default function GoalDetailPage() {
           }}
             onMouseEnter={e => (e.currentTarget.style.color = '#94A3B8')}
             onMouseLeave={e => (e.currentTarget.style.color = '#64748B')}>
-            <ArrowLeft size={14} /> Directives
+            <ArrowLeft size={14} /> Tasks
           </Link>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontWeight: 700, color: '#E2E8F0', fontSize: '0.95rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', letterSpacing: '-0.01em' }}>

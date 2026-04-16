@@ -44,7 +44,7 @@ const AGENT_CONFIG: Record<string, { initials: string; label: string; color: str
 
 const SUGGESTED_PROMPTS = [
   'Deploy a 2-week LinkedIn campaign for a SaaS product launch',
-  'What directives are active and how are they performing?',
+  'What tasks are active and how are they performing?',
   'What operations are scheduled for this week?',
   'Rebuild the top campaign strategy with a heavier video focus',
   'Which platform is generating the highest engagement rate?',
@@ -72,6 +72,7 @@ export default function ChatPage() {
   const [historyLoaded, setHistoryLoaded] = useState(false)
   const [lastPollTime, setLastPollTime] = useState<string | null>(null)
   const [agentsActive, setAgentsActive] = useState(false)
+  const [currentActivity, setCurrentActivity] = useState<string | null>(null)
 
   const bottomRef    = useRef<HTMLDivElement>(null)
   const textareaRef  = useRef<HTMLTextAreaElement>(null)
@@ -104,6 +105,7 @@ export default function ChatPage() {
       try {
         const data = await api.chat.updates(lastPollTime || undefined)
         setAgentsActive(data.agents_active)
+        setCurrentActivity(data.current_activity)
         
         if (data.messages && data.messages.length > 0) {
           setMessages(prev => {
@@ -149,7 +151,7 @@ export default function ChatPage() {
     const assistantMsg: Message = {
       id: assistantId,
       role: 'assistant',
-      bubbles: [{ id: firstBubbleId, content: '', isStreaming: true }],
+      bubbles: [],
       chips: [],
       created_at: now,
     }
@@ -257,7 +259,7 @@ export default function ChatPage() {
     } catch {
       setMessages(prev => prev.map(m =>
         m.id === assistantId
-          ? { ...m, bubbles: [{ id: firstBubbleId, content: 'Connection error. Check Settings and try again.', isStreaming: false }] }
+          ? { ...m, bubbles: m.bubbles.length > 0 ? m.bubbles.map(b => ({ ...b, isStreaming: false })) : [] }
           : m
       ))
     } finally {
@@ -459,15 +461,31 @@ export default function ChatPage() {
               <Zap size={18} color="white" />
             </div>
             <div>
-              <div style={{ fontWeight: 800, fontSize: '0.95rem', background: 'linear-gradient(180deg, #FFFFFF 0%, #94BFDB 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', letterSpacing: '-0.02em' }}>Neural Link</div>
+              <div style={{ fontWeight: 800, fontSize: '0.95rem', background: 'linear-gradient(180deg, #FFFFFF 0%, #94BFDB 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', letterSpacing: '-0.02em' }}>Agentic Hub</div>
               <div style={{ fontSize: '0.65rem', color: '#475569', fontWeight: 600, letterSpacing: '0.06em', marginTop: 1 }}>
                 DIGITAL FORCE COMMAND INTERFACE
               </div>
             </div>
           </div>
+          
+          {/* Dynamic Agent Feed Status */}
+          {agentsActive && currentActivity && (
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 10,
+              background: 'rgba(0,163,255,0.06)', border: '1px solid rgba(0,163,255,0.15)',
+              borderRadius: 8, padding: '6px 12px', fontSize: '0.72rem', color: '#33BAFF',
+              fontWeight: 600, maxWidth: 400, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
+            }}>
+              <span className="thinking-dot" style={{ flexShrink: 0, width: 6, height: 6, background: '#00A3FF' }} />
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {currentActivity.length > 60 ? currentActivity.substring(0, 60) + '...' : currentActivity}
+              </span>
+            </div>
+          )}
+
           {messages.length > 0 && (
             <button id="clear-history" onClick={clearHistory}
-              className="btn-ghost" style={{ fontSize: '0.8rem', gap: 6 }}>
+              className="btn-ghost" style={{ fontSize: '0.8rem', gap: 6, marginLeft: 'auto' }}>
               <Trash2 size={14} /> Clear history
             </button>
           )}
@@ -524,24 +542,7 @@ export default function ChatPage() {
           )}
         </div>
 
-        {/* Agents Working Indicator */}
-        {agentsActive && !loading && (
-          <div style={{
-            display: 'flex', justifyContent: 'center', alignItems: 'center',
-            padding: '8px 0 0 0', position: 'relative', zIndex: 10
-          }}>
-            <div style={{
-              display: 'inline-flex', alignItems: 'center', gap: 10,
-              background: 'rgba(0,163,255,0.08)', border: '1px solid rgba(0,163,255,0.2)',
-              borderRadius: 20, padding: '5px 18px', fontSize: '0.72rem', color: '#33BAFF',
-              fontWeight: 700, letterSpacing: '0.06em',
-              boxShadow: '0 0 20px rgba(0,163,255,0.15)'
-            }}>
-              <span className="thinking-dot" style={{ width: 6, height: 6, background: '#00A3FF' }} />
-              NEURAL AGENTS ACTIVE
-            </div>
-          </div>
-        )}
+
 
         {/* Input */}
         <div style={{
@@ -566,7 +567,7 @@ export default function ChatPage() {
                 value={input}
                 onChange={e => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder={loading ? 'Processing directive...' : 'Initialize a directive... (Enter to transmit)'}
+                placeholder={loading ? 'Processing task...' : 'Initialize a task... (Enter to transmit)'}
                 disabled={loading}
                 rows={1}
                 style={{

@@ -53,9 +53,9 @@ export default function Sidebar() {
   }, [])
 
   const NAV: NavItem[] = [
-    { href: '/chat',     label: 'Neural Link',     icon: MessageSquare, accent: '#00A3FF' },
+    { href: '/chat',     label: 'Agentic Hub',     icon: MessageSquare, accent: '#00A3FF' },
     { href: '/overview', label: 'Overview',         icon: LayoutDashboard },
-    { href: '/goals',    label: 'Directives',       icon: Target, badge: awaitingCount || undefined },
+    { href: '/goals',    label: 'Tasks',       icon: Target, badge: awaitingCount || undefined },
     { href: '/analytics',label: 'Analytics',        icon: BarChart2 },
     { href: '/knowledge',label: 'Knowledge Core',   icon: Network },
     { href: '/skills',   label: 'SkillForge',       icon: Cpu },

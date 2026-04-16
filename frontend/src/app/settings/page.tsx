@@ -101,6 +101,7 @@ export default function SettingsPage() {
   const [timezone, setTimezone]               = useState('UTC')
   const [industry, setIndustry]               = useState('')
   const [brandVoice, setBrandVoice]           = useState('')
+  const [agentTone, setAgentTone]             = useState('')
   const [briefSlots, setBriefSlots]           = useState<BriefSlot[]>([])
   const [daemonStatus, setDaemonStatus]       = useState<Record<string, unknown>>({})
   const [autonomousSaving, setAutonomousSaving] = useState(false)
@@ -128,6 +129,7 @@ export default function SettingsPage() {
         setTimezone(data.timezone || 'UTC')
         setIndustry(data.industry || '')
         setBrandVoice(data.brand_voice || '')
+        setAgentTone(data.agent_tone || '')
         setBriefSlots(data.brief_slots || [])
       })
       .catch(() => {})
@@ -176,6 +178,7 @@ export default function SettingsPage() {
         body: JSON.stringify({
           autonomous_mode: autonomousMode,
           timezone, industry, brand_voice: brandVoice,
+          agent_tone: agentTone,
           brief_slots: briefSlots,
         }),
       })
@@ -443,6 +446,16 @@ export default function SettingsPage() {
                   <textarea id="brand-voice-input" value={brandVoice} onChange={e => setBrandVoice(e.target.value)}
                     placeholder="Describe how your brand speaks — e.g. 'Professional but approachable, bold, future-focused, speaks to C-suite executives...'"
                     rows={3}
+                    style={{ width: '100%', padding: '0.6rem 0.875rem', borderRadius: 10, marginTop: 6,
+                      background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.09)',
+                      color: '#fff', fontSize: '0.875rem', outline: 'none', resize: 'vertical',
+                      boxSizing: 'border-box', fontFamily: 'inherit' }} />
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.5)', fontWeight: 500 }}>Digital Force Character / Tone</label>
+                  <textarea id="agent-tone-input" value={agentTone} onChange={e => setAgentTone(e.target.value)}
+                    placeholder="How should Digital Force speak to you directly? e.g. 'Professional executive assistant, highly concise, strict project manager...'"
+                    rows={2}
                     style={{ width: '100%', padding: '0.6rem 0.875rem', borderRadius: 10, marginTop: 6,
                       background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.09)',
                       color: '#fff', fontSize: '0.875rem', outline: 'none', resize: 'vertical',

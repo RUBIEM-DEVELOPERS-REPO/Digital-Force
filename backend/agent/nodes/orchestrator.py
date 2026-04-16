@@ -8,7 +8,7 @@ import logging
 from pathlib import Path
 from agent.state import AgentState
 from agent.llm import generate_json
-from agent.chat_push import chat_push
+from agent.chat_push import chat_push, agent_thought_push
 
 logger = logging.getLogger(__name__)
 
@@ -26,9 +26,9 @@ async def orchestrator_node(state: AgentState) -> dict:
     logger.info(f"[Orchestrator] Processing goal: {goal_desc[:100]}...")
 
     # Announce in chat the moment we start
-    await chat_push(
+    await agent_thought_push(
         user_id=user_id,
-        content=f"🎯 Mission received. Parsing your goal and structuring the brief...",
+        context="parsing the raw user goal to structure a mission brief",
         agent_name="orchestrator",
         goal_id=goal_id,
     )
@@ -47,12 +47,9 @@ Parse this goal and produce the mission brief JSON.
         platforms = result.get("platforms", state.get("platforms", []))
         next_node  = "researcher" if result.get("requires_research") else "strategist"
 
-        await chat_push(
+        await agent_thought_push(
             user_id=user_id,
-            content=(
-                f"🎯 Brief complete. Platforms: {', '.join(platforms)}. "
-                f"{'Dispatching Researcher to gather market intelligence...' if next_node == 'researcher' else 'Dispatching Strategist to build the campaign plan...'}"
-            ),
+            context=f"finalized mission brief for platforms: {', '.join(platforms)}. Dispatching to {'Researcher' if next_node == 'researcher' else 'Strategist'}",
             agent_name="orchestrator",
             goal_id=goal_id,
         )
@@ -68,9 +65,9 @@ Parse this goal and produce the mission brief JSON.
 
     except Exception as e:
         logger.error(f"[Orchestrator] Error: {e}")
-        await chat_push(
+        await agent_thought_push(
             user_id=user_id,
-            content=f"⚠️ Orchestrator hit an issue parsing the goal. Routing direct to Strategist.",
+            context=f"hit an unexpected error parsing the goal, routing to Strategist as fallback",
             agent_name="orchestrator",
             goal_id=goal_id,
         )

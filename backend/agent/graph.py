@@ -1,11 +1,13 @@
 """
-Digital Force — LangGraph Agent Graph
-Wires all agent nodes into a stateful, cyclical multi-agent workflow.
+Digital Force — LangGraph Agent Graph (Neural Supervisor)
+Hub-and-spoke architecture where Supervisor evaluates state and routes dynamically.
 """
 
 import logging
 from langgraph.graph import StateGraph, END
 from agent.state import AgentState
+from agent.nodes.executive import executive_node
+from agent.nodes.manager import manager_node
 from agent.nodes.orchestrator import orchestrator_node
 from agent.nodes.researcher import researcher_node
 from agent.nodes.strategist import strategist_node
@@ -16,99 +18,67 @@ from agent.nodes.monitor import monitor_node
 
 logger = logging.getLogger(__name__)
 
+def manager_router(state: AgentState) -> str:
+    """Read the routing decision made by the manager_node or executive_node."""
+    nxt = state.get("next_agent")
+    if not nxt or nxt == "__end__":
+        return END
+    return nxt
 
-def route_after_orchestrator(state: AgentState) -> str:
-    return state.get("next_agent", "researcher")
-
-
-def route_after_researcher(state: AgentState) -> str:
-    return state.get("next_agent", "strategist")
-
-
-def route_after_strategist(state: AgentState) -> str:
-    """After planning, always go to approval gateway (handled externally — pause here)."""
-    return END  # Graph pauses; execution resumes after human approval
-
-
-def route_after_content(state: AgentState) -> str:
-    return state.get("next_agent", "publisher")
-
-
-def route_after_publisher(state: AgentState) -> str:
-    next_a = state.get("next_agent", "monitor")
-    if next_a == "skillforge":
-        return "skillforge"
-    return "monitor"
-
-
-def route_after_skillforge(state: AgentState) -> str:
-    return state.get("next_agent", "monitor")
-
-
-def route_after_monitor(state: AgentState) -> str:
-    if state.get("needs_replan") and state.get("replan_count", 0) < 3:
-        return "strategist"
-    return END
-
-
-def build_planning_graph() -> StateGraph:
+def build_neural_graph() -> StateGraph:
     """
-    Phase 1 graph: GOAL → ORCHESTRATOR → RESEARCHER → STRATEGIST → [PAUSE for approval]
+    Unified Hub-and-Spoke topology starting with the Executive.
+    Executive evaluates user input -> Manager delegates tasks -> Workers execute.
+    After any agent acts, execution returns to the Manager.
     """
     graph = StateGraph(AgentState)
-
+    
+    # Add nodes
+    graph.add_node("executive", executive_node)
+    graph.add_node("manager", manager_node)
     graph.add_node("orchestrator", orchestrator_node)
     graph.add_node("researcher", researcher_node)
     graph.add_node("strategist", strategist_node)
-
-    graph.set_entry_point("orchestrator")
-    graph.add_conditional_edges("orchestrator", route_after_orchestrator, {
-        "researcher": "researcher",
-        "strategist": "strategist",
-    })
-    graph.add_conditional_edges("researcher", route_after_researcher, {
-        "strategist": "strategist",
-    })
-    graph.add_edge("strategist", END)
-
-    return graph.compile()
-
-
-def build_execution_graph() -> StateGraph:
-    """
-    Phase 2 graph: [APPROVED] → CONTENT → PUBLISHER → SKILLFORGE → MONITOR → [loop or END]
-    """
-    graph = StateGraph(AgentState)
-
     graph.add_node("content_director", content_director_node)
     graph.add_node("publisher", publisher_node)
     graph.add_node("skillforge", skillforge_node)
     graph.add_node("monitor", monitor_node)
-    graph.add_node("strategist", strategist_node)  # For re-planning
 
-    graph.set_entry_point("content_director")
-    graph.add_conditional_edges("content_director", route_after_content, {
-        "publisher": "publisher",
-        "monitor": "monitor",
+    # Set Entry Point
+    graph.set_entry_point("executive")
+
+    # Executive conditional routing
+    graph.add_conditional_edges("executive", manager_router, {
+        "manager": "manager",
+        END: END
     })
-    graph.add_conditional_edges("publisher", route_after_publisher, {
+
+    # Manager conditional routing
+    graph.add_conditional_edges("manager", manager_router, {
+        "orchestrator": "orchestrator",
+        "researcher": "researcher",
+        "strategist": "strategist",
+        "content_director": "content_director",
+        "publisher": "publisher",
         "skillforge": "skillforge",
         "monitor": "monitor",
+        END: END
     })
-    graph.add_conditional_edges("skillforge", route_after_skillforge, {
-        "monitor": "monitor",
-        "publisher": "publisher",
-        END: END,
-    })
-    graph.add_conditional_edges("monitor", route_after_monitor, {
-        "strategist": "strategist",
-        END: END,
-    })
-    graph.add_edge("strategist", "content_director")  # Re-plan → re-execute
+
+    # All action nodes return their output to the Manager to decide what to do next
+    graph.add_edge("orchestrator", "manager")
+    graph.add_edge("researcher", "manager")
+    graph.add_edge("strategist", "manager")
+    graph.add_edge("content_director", "manager")
+    graph.add_edge("publisher", "manager")
+    graph.add_edge("skillforge", "manager")
+    graph.add_edge("monitor", "manager")
 
     return graph.compile()
 
+# To maintain API backwards compatibility for api/goals.py
+# We export the same dynamic neural graph for both phases.
+# The manager_node inspects `state["approval_status"]` to route correctly.
+planning_graph = build_neural_graph()
+execution_graph = build_neural_graph()
 
-# Compiled graphs (singletons)
-planning_graph = build_planning_graph()
-execution_graph = build_execution_graph()

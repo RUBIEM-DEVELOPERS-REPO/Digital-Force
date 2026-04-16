@@ -322,6 +322,11 @@ class PlatformConnection(Base):
     access_token_encrypted: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     refresh_token_encrypted: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     api_key_encrypted: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    
+    # Headless browser fallback credentials
+    web_username: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    web_password_encrypted: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
     extra_config: Mapped[Optional[str]] = mapped_column(Text, nullable=True)     # JSON for platform-specific
 
     # Status
@@ -414,6 +419,9 @@ class AgencySettings(Base):
     # Inferred from training docs + conversations; editable by user
     industry: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     brand_voice: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    
+    # ── Digital Force Persona ─────────────────────────────────
+    agent_tone: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # ── Daemon tracking timestamps ────────────────────────────
     daemon_last_ran: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)

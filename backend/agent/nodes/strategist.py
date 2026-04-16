@@ -9,7 +9,7 @@ from pathlib import Path
 from datetime import datetime, timedelta
 from agent.state import AgentState
 from agent.llm import generate_json
-from agent.chat_push import chat_push
+from agent.chat_push import chat_push, agent_thought_push
 
 logger = logging.getLogger(__name__)
 
@@ -25,9 +25,9 @@ async def strategist_node(state: AgentState) -> dict:
     user_id = state.get('created_by', '')
     logger.info(f"[Strategist] Creating campaign plan for goal {goal_id}")
 
-    await chat_push(
+    await agent_thought_push(
         user_id=user_id,
-        content="📋 Building your full campaign plan — content schedule, tasks, and publishing strategy...",
+        context="synthesizing research and building the full campaign strategy blueprint",
         agent_name="strategist",
         goal_id=goal_id,
     )
@@ -59,14 +59,9 @@ Each task must have enough detail for the Content Director to act without clarif
         duration = plan.get('duration_days', 7)
         logger.info(f"[Strategist] Generated plan with {len(tasks)} tasks")
 
-        await chat_push(
+        await agent_thought_push(
             user_id=user_id,
-            content=(
-                f"📋 Campaign plan ready: **{plan.get('campaign_name', 'Your Campaign')}**\n"
-                f"{len(tasks)} tasks planned over {duration} days.\n"
-                f"{plan.get('campaign_summary', '')}\n"
-                f"Awaiting your approval before execution begins."
-            ),
+            context=f"finalized the entire campaign strategy consisting of {len(tasks)} tasks over {duration} days and halting for human command approval",
             agent_name="strategist",
             goal_id=goal_id,
             metadata={"task_count": len(tasks), "duration_days": duration},
@@ -81,9 +76,9 @@ Each task must have enough detail for the Content Director to act without clarif
 
     except Exception as e:
         logger.error(f"[Strategist] Error: {e}")
-        await chat_push(
+        await agent_thought_push(
             user_id=user_id,
-            content=f"⚠️ Strategist encountered an issue building the plan. Will retry.",
+            context=f"encountered a critical logic fault while building the plan and triggering a fallback",
             agent_name="strategist",
             goal_id=goal_id,
         )

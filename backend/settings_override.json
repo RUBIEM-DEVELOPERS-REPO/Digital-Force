@@ -1,0 +1,13 @@
+{
+  "frontend_url": "http://localhost:3000",
+  "cors_origins": "http://localhost:3000,http://127.0.0.1:3000",
+  "facebook_page_id": "360561740483394",
+  "qdrant_url": "https://b294b9f8-d8ac-44d0-b570-be8a5f4211e3.us-east4-0.gcp.cloud.qdrant.io",
+  "smtp_host": "smtp.gmail.com",
+  "smtp_port": 587,
+  "smtp_username": "digitalforce1st@gmail.com",
+  "smtp_from_name": "Digital Force",
+  "smtp_from_email": "digitalforce1st@gmail.com",
+  "agent_max_iterations": 30,
+  "agent_timeout_seconds": 1200
+}

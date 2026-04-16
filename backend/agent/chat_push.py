@@ -48,7 +48,7 @@ async def chat_push(
         return
 
     try:
-        from database import ChatMessage, async_session
+        from database import ChatMessage, AgentLog, async_session
         async with async_session() as session:
             session.add(ChatMessage(
                 user_id=user_id,
@@ -58,8 +58,37 @@ async def chat_push(
                 goal_id=goal_id,
                 meta=json.dumps(metadata or {}),
             ))
+            if goal_id:
+                session.add(AgentLog(
+                    goal_id=goal_id,
+                    agent=agent_name,
+                    level="info",
+                    thought=content,
+                    action="chat_push"
+                ))
             await session.commit()
         logger.info(f"[ChatPush] [{agent_name.upper()}] → user {user_id[:8]}: {content[:80]}")
     except Exception as e:
         # Never let a chat push failure crash an agent node
         logger.error(f"[ChatPush] Failed to persist message from '{agent_name}': {e}")
+
+
+async def agent_thought_push(
+    user_id: str,
+    agent_name: str,
+    context: str,
+    goal_id: Optional[str] = None,
+    metadata: Optional[dict] = None,
+) -> None:
+    """
+    Rapidly uses a lightweight LLM to generate a dynamic, first-person thought
+    about what the agent is currently doing, then pushes it to the UI.
+    """
+    from agent.llm import generate_completion
+    prompt = f"You are {agent_name.upper()}, an autonomous AI agent in the Digital Force network. You are currently: {context}. Give a dynamic, first-person present-tense thought (max 1 sentence) about what you are doing right now. NO hashtags, NO emojis, NO quotation marks, just raw telemetry thought."
+    try:
+        dynamic_thought = await generate_completion(prompt, temperature=0.3)
+        await chat_push(user_id, dynamic_thought.strip(' "').replace("\n", ""), agent_name, goal_id, metadata)
+    except Exception as e:
+        logger.warning(f"[ThoughtPush] Fast thought generation failed, falling back to context: {e}")
+        await chat_push(user_id, f"{agent_name.capitalize()}: Initializing {context}...", agent_name, goal_id, metadata)

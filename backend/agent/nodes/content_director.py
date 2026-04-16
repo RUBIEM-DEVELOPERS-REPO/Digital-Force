@@ -12,38 +12,30 @@ from config import get_settings
 logger = logging.getLogger(__name__)
 settings = get_settings()
 
-PLATFORM_RULES = {
-    "linkedin": {
-        "max_chars": 3000, "optimal_chars": "150-300",
-        "hashtags": "3-5", "tone_default": "professional, authoritative",
-        "format_tip": "Use line breaks every 2-3 sentences. Strong opening hook. End with CTA or question.",
-    },
-    "facebook": {
-        "max_chars": 63206, "optimal_chars": "100-250",
-        "hashtags": "1-3", "tone_default": "conversational, relatable",
-        "format_tip": "Emotional hook. Short paragraphs. Use emojis sparingly.",
-    },
-    "twitter": {
-        "max_chars": 280, "optimal_chars": "240",
-        "hashtags": "1-2", "tone_default": "punchy, bold, direct",
-        "format_tip": "Pack value in every word. Use numbers. Question or bold statement.",
-    },
-    "tiktok": {
-        "max_chars": 2200, "optimal_chars": "150-300",
-        "hashtags": "3-6", "tone_default": "energetic, relatable, trendy",
-        "format_tip": "Hook in first 3 words. Use trending sounds reference. Video description.",
-    },
-    "instagram": {
-        "max_chars": 2200, "optimal_chars": "138-150",
-        "hashtags": "10-15", "tone_default": "visual, inspiring, lifestyle",
-        "format_tip": "Punchy first line (shown before 'more'). Hashtag block at end.",
-    },
-    "youtube": {
-        "max_chars": 5000, "optimal_chars": "200-500",
-        "hashtags": "5-10", "tone_default": "informative, engaging",
-        "format_tip": "Include keywords naturally. Timestamps if applicable. CTA at end.",
-    },
-}
+async def _determine_platform_rules(platform: str, brief: dict) -> dict:
+    """Dynamically deduce optimal platform algorithms and character constraints using the LLM."""
+    system = "You are an elite, modern social media algorithm expert. Identify the CURRENT optimal constraints and formats."
+    prompt = f"""Target Platform: {platform}
+Return ONLY JSON:
+{{
+  "optimal_chars": "e.g., 150-300",
+  "hashtags": "e.g., 3-5",
+  "tone_default": "e.g., professional",
+  "format_tip": "e.g., Hook in first 3 words."
+}}"""
+    try:
+        rules = await generate_json(prompt, system)
+        return {
+            "optimal_chars": rules.get("optimal_chars", "150-300"),
+            "hashtags": rules.get("hashtags", "3-5"),
+            "tone_default": rules.get("tone_default", "engaging"),
+            "format_tip": rules.get("format_tip", "Start with a strong hook.")
+        }
+    except Exception as e:
+        logger.warning(f"Failed dynamic rule generation: {e}")
+        return {
+            "optimal_chars": "100-300", "hashtags": "2-5", "tone_default": "engaging", "format_tip": "Strong hook."
+        }
 
 
 async def _fetch_brand_context(prompt: str, platform: str) -> str:
@@ -77,7 +69,7 @@ async def content_director_node(state: AgentState) -> dict:
 
     platform = pending_task.get("platform", "linkedin")
     brief = pending_task.get("content_brief", {})
-    rules = PLATFORM_RULES.get(platform, PLATFORM_RULES["linkedin"])
+    rules = await _determine_platform_rules(platform, brief)
 
     # Fetch brand voice from RAG
     brand_context = await _fetch_brand_context(state["goal_description"], platform)

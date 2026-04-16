@@ -20,6 +20,7 @@ interface Goal {
   tasks_completed: number
   platforms: string[]
   created_at: string
+  latest_activity?: string
 }
 
 const STATUS_CONFIG: Record<string, { label: string; cls: string; icon: React.ElementType }> = {
@@ -91,7 +92,7 @@ export default function OverviewPage() {
                 textDecoration: 'none', letterSpacing: '0.03em',
               }}>
                 <Plus size={16} />
-                Deploy Directive
+                Deploy Task
               </Link>
             </div>
           </motion.div>
@@ -137,7 +138,7 @@ export default function OverviewPage() {
           <motion.div variants={stagger.container} initial="hidden" animate="show"
             style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.25rem', marginBottom: '2.5rem' }}>
             {[
-              { label: 'Active Directives', value: activeGoals.length, icon: Target, color: '#00A3FF', glow: 'rgba(0,163,255,0.1)' },
+              { label: 'Active Tasks', value: activeGoals.length, icon: Target, color: '#00A3FF', glow: 'rgba(0,163,255,0.1)' },
               { label: 'Pending Authorization', value: awaiting.length, icon: AlertCircle, color: '#F59E0B', glow: 'rgba(245,158,11,0.1)' },
               { label: 'Total Operations', value: goals.length, icon: Zap, color: '#10B981', glow: 'rgba(16,185,129,0.1)' },
             ].map((stat, i) => (
@@ -167,7 +168,7 @@ export default function OverviewPage() {
           {/* ── Active Directives ── */}
           <div style={{ marginBottom: '2.5rem' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem' }}>
-              <h2 style={{ fontSize: '1rem', fontWeight: 700, color: '#F8FAFC', letterSpacing: '-0.01em' }}>Active Directives</h2>
+              <h2 style={{ fontSize: '1rem', fontWeight: 700, color: '#F8FAFC', letterSpacing: '-0.01em' }}>Active Tasks</h2>
               <Link href="/goals" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.78rem', color: '#475569', fontWeight: 600, textDecoration: 'none', letterSpacing: '0.04em', transition: 'color 0.2s' }}
                 onMouseEnter={e => (e.currentTarget.style.color = '#00A3FF')}
                 onMouseLeave={e => (e.currentTarget.style.color = '#475569')}>
@@ -190,9 +191,9 @@ export default function OverviewPage() {
                 <div style={{ width: 64, height: 64, borderRadius: '1.125rem', background: 'rgba(0,163,255,0.1)', border: '1px solid rgba(0,163,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '1.5rem' }}>
                   <Target size={28} style={{ color: '#00A3FF' }} />
                 </div>
-                <h3 style={{ fontSize: '1.1rem', fontWeight: 800, color: '#F8FAFC', marginBottom: '0.75rem', letterSpacing: '-0.01em' }}>No Active Directives</h3>
+                <h3 style={{ fontSize: '1.1rem', fontWeight: 800, color: '#F8FAFC', marginBottom: '0.75rem', letterSpacing: '-0.01em' }}>No Active Tasks</h3>
                 <p style={{ fontSize: '0.875rem', color: '#475569', maxWidth: 380, lineHeight: 1.7, marginBottom: '2rem' }}>
-                  Deploy a directive and watch the neural agents autonomously synthesize and execute a complete strategy.
+                  Deploy a task and watch the neural agents autonomously synthesize and execute a complete strategy.
                 </p>
                 <Link href="/goals/new" style={{
                   display: 'inline-flex', alignItems: 'center', gap: 8,
@@ -202,7 +203,7 @@ export default function OverviewPage() {
                   color: '#fff', fontSize: '0.875rem', fontWeight: 700,
                   textDecoration: 'none', boxShadow: '0 8px 32px rgba(0,163,255,0.35)',
                 }}>
-                  <Plus size={16} /> Deploy First Directive
+                  <Plus size={16} /> Deploy First Task
                 </Link>
               </div>
             ) : (
@@ -226,8 +227,9 @@ export default function OverviewPage() {
 
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.75rem' }}>
-                              <span className={s.cls} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                                <StatusIcon size={11} />{s.label}
+                              <span className={s.cls} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, maxWidth: 300, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                <StatusIcon size={11} style={{ flexShrink: 0 }} />
+                                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{goal.latest_activity || s.label}</span>
                               </span>
                               <span style={{ fontSize: '0.72rem', color: '#334155', fontWeight: 600, letterSpacing: '0.04em' }}>
                                 {goal.tasks_completed}/{goal.tasks_total} ops
@@ -262,7 +264,7 @@ export default function OverviewPage() {
             <motion.div variants={stagger.container} initial="hidden" animate="show"
               style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.25rem' }}>
               {[
-                { href: '/goals/new', icon: Target, title: 'Deploy Directive', desc: 'Initialize autonomous campaign', color: '#00A3FF' },
+                { href: '/goals/new', icon: Target, title: 'Deploy Task', desc: 'Initialize autonomous campaign', color: '#00A3FF' },
                 { href: '/knowledge', icon: Network, title: 'Knowledge Core', desc: 'Inject intelligence assets', color: '#22D3EE' },
                 { href: '/skills', icon: Cpu, title: 'SkillForge', desc: 'Upgrade neural capabilities', color: '#10B981' },
               ].map(({ href, icon: Icon, title, desc, color }) => (

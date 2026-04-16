@@ -39,6 +39,7 @@ class AgencySettingsUpdate(BaseModel):
     timezone: Optional[str] = None
     industry: Optional[str] = None
     brand_voice: Optional[str] = None
+    agent_tone: Optional[str] = None
     brief_slots: Optional[List[BriefSlot]] = None
 
 
@@ -66,6 +67,7 @@ def _serialize(cfg: AgencySettings) -> dict:
         "timezone": cfg.timezone,
         "industry": cfg.industry,
         "brand_voice": cfg.brand_voice,
+        "agent_tone": cfg.agent_tone,
         "brief_slots": json.loads(cfg.brief_slots or "[]"),
         "daemon_last_ran": cfg.daemon_last_ran.isoformat() if cfg.daemon_last_ran else None,
         "last_brief_sent": cfg.last_brief_sent.isoformat() if cfg.last_brief_sent else None,
@@ -116,6 +118,9 @@ async def update_agency_settings(
 
     if body.brand_voice is not None:
         cfg.brand_voice = body.brand_voice
+
+    if body.agent_tone is not None:
+        cfg.agent_tone = body.agent_tone
 
     if body.brief_slots is not None:
         slots = []
