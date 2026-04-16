@@ -113,8 +113,8 @@ async def update_agency_settings(
     if body.timezone is not None:
         # Basic sanity check on timezone string
         try:
-            import pytz
-            pytz.timezone(body.timezone)
+            import zoneinfo
+            zoneinfo.ZoneInfo(body.timezone)
             cfg.timezone = body.timezone
         except Exception:
             raise HTTPException(400, f"Invalid timezone: {body.timezone}")

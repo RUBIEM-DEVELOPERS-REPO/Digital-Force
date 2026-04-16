@@ -31,8 +31,8 @@ async def distribution_manager_node(state: AgentState):
         logger.warning(f"Task {current_id} has no platform. Skipping distribution.")
         return {"next_agent": "manager"}
 
-    from database import AsyncSessionLocal
-    async with AsyncSessionLocal() as session:
+    from database import async_session
+    async with async_session() as session:
         # Fetch all available accounts for this platform
         stmt = select(PlatformConnection).where(PlatformConnection.platform == platform, PlatformConnection.is_enabled == True)
         result = await session.execute(stmt)

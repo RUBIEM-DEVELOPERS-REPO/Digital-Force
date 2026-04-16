@@ -1,33 +1,23 @@
 """
-Digital Force — Supervisor Node (Neural Hub)
-Dynamically routes state to the appropriate agent instead of a linear pipeline.
+Digital Force — Supervisor Node (Omniscient ReAct Hub)
 """
-
-import json
 import logging
 from agent.state import AgentState
-from agent.llm import generate_json
-from agent.chat_push import chat_push
+from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage, AIMessage
 
 logger = logging.getLogger(__name__)
 
 async def manager_node(state: AgentState) -> dict:
-    """
-    Evaluates current state and dynamically routes to the next best agent.
-    If we are gathering info: -> researcher
-    If we need a plan: -> strategist
-    If we need content: -> content_director
-    If we need publishing: -> publisher
-    If we hit errors: -> skillforge
-    """
-    goal_id = state['goal_id']
-    user_id = state.get('created_by', '')
-    logger.info(f"[Supervisor] Evaluating state for goal: {goal_id[:8]}...")
+    from agent.tools.system_tools import get_agent_tools
+    from agent.llm import get_tool_llm
     
-    tasks = state.get("tasks", [])
+    logger.info(f"[Supervisor] Waking up Omni-Hub for goal: {state['goal_id'][:8]}...")
+    
+    tools = get_agent_tools(state)
+    llm = get_tool_llm(temperature=0.2).bind_tools(tools)
     
     # ── Map-Reduce Results Stitching ──
-    # If the content directors generated results in parallel, stitch them back into the task objects.
+    tasks = state.get("tasks", [])
     swarm_res = state.get("content_swarm_results", [])
     state_updates = {}
     if swarm_res:
@@ -41,73 +31,87 @@ async def manager_node(state: AgentState) -> dict:
                     t_copy["task_type"] = "post_content"
                     has_new = True
             new_tasks.append(t_copy)
-            
         if has_new:
-            tasks = new_tasks
-            state_updates["tasks"] = tasks
-    
-    # 1. Compress State for LLM
-    completed = state.get("completed_task_ids", [])
-    failed = state.get("failed_task_ids", [])
-    uncompleted = [t for t in tasks if t.get("id") not in completed and t.get("id") not in failed]
-    
-    compressed_state = {
-        "status": state.get("approval_status", "pending"),
-        "has_platforms": bool(state.get("platforms")),
-        "has_research": bool(state.get("research_findings")),
-        "needs_replanning_research": state.get("needs_replanning_research", False),
-        "has_campaign_plan": bool(state.get("campaign_plan")),
-        "tasks_total": len(tasks),
-        "tasks_completed": len(completed),
-        "tasks_failed": len(failed),
-        "uncompleted_content_tasks": len([t for t in uncompleted if t.get("task_type") == "generate_content"]),
-        "uncompleted_publish_tasks_unassigned": len([t for t in uncompleted if t.get("task_type") == "post_content" and not t.get("connection_id")]),
-        "uncompleted_publish_tasks_assigned": len([t for t in uncompleted if t.get("task_type") == "post_content" and t.get("connection_id")]),
-    }
+            state_updates["tasks"] = new_tasks
 
-    # 2. Dynamic True NLP Routing
-    prompt = f"""You are the Manager Node of Digital Force.
-Your job is to route to the correct agent based on the current state.
-
-State Summary:
-{json.dumps(compressed_state, indent=2)}
-
-Available Agents:
-- "skillforge": if there are broken/failed tasks
-- "orchestrator": if platforms are not set up yet
-- "researcher": if research is missing or needs replanning
-- "strategist": if campaign plan is missing but research is done
-- "content_director": if there are uncompleted content tasks (need generating)
-- "distribution_manager": if there are uncompleted publish tasks that have NOT been assigned to an account (uncompleted_publish_tasks_unassigned > 0)
-- "publisher": if there are uncompleted publish tasks that ARE assigned (uncompleted_publish_tasks_assigned > 0)
-- "monitor": if all tasks are processed or executing is done
-- "__end__": if the plan is ready but status is still pending (halt for human approval)
-
-Evaluate the state and decide the single most logical next_agent to route to.
-
-Return strictly JSON:
-{{
-  "thought": "Your dynamic internal reasoning about what you decided and why. Short and concise.",
-  "next_agent": "..."
-}}"""
-
-    try:
-        response = await generate_json(prompt)
-        next_agent = response.get("next_agent", "__end__")
-        thought = response.get("thought", "Routing determined from current state.")
-        await chat_push(user_id, f"Manager: {thought}", "digital force - manager", goal_id)
+    messages = list(state.get("messages", []))
+    if not messages:
+        messages.append(HumanMessage(content="Trigger autonomous cycle."))
         
-        # Intercept high-risk execution nodes for Auditing
-        if next_agent in ["publisher", "skillforge"]:
-            state_updates.update({
-                "next_agent": "auditor",
-                "target_agent": next_agent
-            })
-            return state_updates
+    system_prompt = """You are the Omniscient Manager of the Digital Force AI Agency.
+You have native ability to write code, read the database, query memory, or delegate to specific sub-agents.
+Always use `push_to_chat` BEFORE delegating to a sub-agent or writing heavy code so the human knows what you are doing natively in the chat UI.
+
+Sub-Agent Routing Guide (Use route_to_agent ONLY when these specialized pipelines are absolutely required):
+- orchestrator: Extracts intent and platforms from human goals.
+- researcher: Scrapes web data.
+- strategist: Builds campaigns.
+- content_director: Writes social media copy.
+- distribution_manager: Assigns proxy environments.
+- publisher: Executes the final post.
+- skillforge: Re-writes existing system tool schemas specifically.
+- monitor: Pulls analytics.
+
+If the user asks you to do something simple or something unrelated to standard social media (like parsing a CSV, fetching web text, scanning the web, API integrations), DO NOT use regular agents! Instead, use `execute_python` and write a robust python script to do it directly in the local sandbox!
+
+If the user gives you a password, auth token, or credential, immediately use `update_truth_bucket` to save it and tell them it's saved!
+
+If you are done processing the user's intent or you need to reply directly to their chat message, push a message via `push_to_chat` then use `halt_execution`."""
+
+    messages.insert(0, SystemMessage(content=system_prompt))
+    
+    max_loops = 5
+    loops = 0
+    target_next_agent = "__end__"
+    
+    while loops < max_loops:
+        loops += 1
+        response = await llm.ainvoke(messages)
+        messages.append(response)
+        
+        if not response.tool_calls:
+            # Reached a conclusion without halting explicitly
+            break
             
-        state_updates["next_agent"] = next_agent
+        exit_loop = False
+        
+        for tc in response.tool_calls:
+            tool_name = tc["name"]
+            tool_args = tc["args"]
+            
+            # Find tool
+            tool_func = next((t for t in tools if t.name == tool_name), None)
+            if tool_func:
+                try:
+                    res = await tool_func.ainvoke(tool_args)
+                    res_str = str(res)
+                    # Check if it was a routing command
+                    if "ROUTING_REQUESTED:" in res_str:
+                        target_next_agent = res_str.split(":")[1].strip()
+                        exit_loop = True
+                        break
+                    else:
+                        messages.append(ToolMessage(content=res_str, tool_call_id=tc["id"]))
+                except Exception as e:
+                    messages.append(ToolMessage(content=f"Error: {e}", tool_call_id=tc["id"]))
+            else:
+                messages.append(ToolMessage(content="Tool not found.", tool_call_id=tc["id"]))
+                
+        if exit_loop:
+            break
+            
+    # Clean up message list (remove SystemMessages before returning to exact state requirements)
+    final_messages = [m for m in messages if getattr(m, "type", "") != "system"]
+    state_updates["messages"] = final_messages
+    
+    # Intercept high-risk execution nodes for Auditing
+    if target_next_agent in ["publisher", "skillforge"]:
+        state_updates.update({
+            "next_agent": "auditor",
+            "target_agent": target_next_agent
+        })
         return state_updates
-    except Exception as e:
-        logger.error(f"[Manager] NLP Routing failed: {e}")
-        # absolute fallback
-        return {"next_agent": "__end__"}
+
+    state_updates["next_agent"] = target_next_agent
+    logger.info(f"[Supervisor] Routing done. Handoff to: {target_next_agent}")
+    return state_updates

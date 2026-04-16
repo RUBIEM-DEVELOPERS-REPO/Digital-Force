@@ -63,6 +63,7 @@ async def _run_cycle():
 
     # ── Phase 1: Process ALL goals regardless of autonomous mode ─────────────
     await _phase_execute_goals(now)
+    await _phase_retry_failed_posts(now)
 
     # ── Phase 2: Process autonomous-mode users ───────────────────────────────
     async with async_session() as session:
@@ -194,6 +195,44 @@ async def _push_execution_status(goal):
         )
 
     await chat_push(goal.created_by, msg, "monitor", goal.id)
+
+
+async def _phase_retry_failed_posts(now: datetime):
+    """
+    Sweeps for any posts that failed to publish and auto-queues a resilient 
+    fallback execution task for the Publisher agent.
+    """
+    from database import async_session, PublishedPost, AgentTask
+    from sqlalchemy import select
+    import uuid
+
+    async with async_session() as session:
+        result = await session.execute(
+            select(PublishedPost).where(PublishedPost.status == "failed")
+        )
+        failed_posts = result.scalars().all()
+
+        for post in failed_posts:
+            # Mark it as retrying to prevent infinite daemon loops
+            post.status = "retrying"
+            
+            if post.goal_id:
+                # Dispatch a fresh Publisher task bridging fallback systems
+                new_task = AgentTask(
+                    id=str(uuid.uuid4()),
+                    goal_id=post.goal_id,
+                    task_type="post_content",
+                    agent="publisher",
+                    description=f"Auto-Retry: Publish failed content on {post.platform}",
+                    status="queued",
+                    platform=post.platform,
+                    connection_id=post.connection_id,
+                )
+                session.add(new_task)
+                logger.info(f"[Daemon] Swept failed post {post.id}. Re-queued Publisher task: {new_task.id}")
+                
+        if failed_posts:
+            await session.commit()
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

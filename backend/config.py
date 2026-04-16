@@ -89,7 +89,8 @@ class Settings(BaseSettings):
     smtp_username: str = ""
     smtp_password: str = ""
     smtp_from_name: str = "Digital Force"
-    smtp_from_email: str = ""
+    smtp_from_email: str = "noreply@digitalforce.ai"
+    target_notification_emails: str = ""
 
     # ── SkillForge (E2B Sandbox) ──────────────────────────
     e2b_api_key: str = ""

@@ -13,4 +13,5 @@ if exist .next rmdir /s /q .next
 
 echo.
 echo Starting Next.js dev server on port 3000 (Webpack mode)...
+set NODE_OPTIONS=--max-old-space-size=3072
 npm run dev -- --webpack

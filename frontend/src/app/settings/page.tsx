@@ -102,6 +102,7 @@ export default function SettingsPage() {
   const [industry, setIndustry]               = useState('')
   const [brandVoice, setBrandVoice]           = useState('')
   const [agentTone, setAgentTone]             = useState('')
+  const [riskTolerance, setRiskTolerance]     = useState(70)
   const [briefSlots, setBriefSlots]           = useState<BriefSlot[]>([])
   const [daemonStatus, setDaemonStatus]       = useState<Record<string, unknown>>({})
   const [autonomousSaving, setAutonomousSaving] = useState(false)
@@ -135,6 +136,7 @@ export default function SettingsPage() {
         setIndustry(data.industry || '')
         setBrandVoice(data.brand_voice || '')
         setAgentTone(data.agent_tone || '')
+        setRiskTolerance(data.risk_tolerance ?? 70)
         setBriefSlots(data.brief_slots || [])
       })
       .catch(() => {})
@@ -164,7 +166,7 @@ export default function SettingsPage() {
       const saveable = ['groq_api_key_1','groq_api_key_2','groq_api_key_3',
         'buffer_access_token','facebook_page_id','facebook_access_token',
         'qdrant_url','qdrant_api_key','smtp_host','smtp_port','smtp_username',
-        'smtp_password','smtp_from_name','smtp_from_email','frontend_url',
+        'smtp_password','smtp_from_name','smtp_from_email','target_notification_emails','frontend_url',
         'cors_origins','agent_max_iterations','agent_timeout_seconds', 'proxy_provider_api']
       for (const key of saveable) {
         if (form[key] !== undefined && !form[key].includes('•')) payload[key] = form[key]
@@ -182,16 +184,18 @@ export default function SettingsPage() {
   const handleSaveAutonomous = async () => {
     setAutonomousSaving(true)
     try {
-      await fetch(`${BASE}/api/agency`, {
+      const res = await fetch(`${BASE}/api/agency`, {
         method: 'PUT',
         headers: authHeaders(),
         body: JSON.stringify({
           autonomous_mode: autonomousMode,
           timezone, industry, brand_voice: brandVoice,
           agent_tone: agentTone,
+          risk_tolerance: riskTolerance,
           brief_slots: briefSlots,
         }),
       })
+      if (!res.ok) throw new Error('API Error')
       setAutonomousSaved(true)
       setTimeout(() => setAutonomousSaved(false), 3000)
     } catch (e) {
@@ -410,14 +414,17 @@ export default function SettingsPage() {
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
                       <div>
                         <label style={{ fontSize: '0.78rem', color: 'rgba(255,255,255,0.4)' }}>Platform</label>
-                        <select value={newAccount.platform} onChange={e => setNewAccount(s => ({ ...s, platform: e.target.value }))}
-                          style={{ width: '100%', padding: '0.5rem 0.75rem', borderRadius: 8, marginTop: 4, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.09)', color: '#fff', fontSize: '0.85rem', outline: 'none' }}>
-                          <option value="instagram" style={{ background: '#1a1a2e' }}>Instagram</option>
-                          <option value="tiktok" style={{ background: '#1a1a2e' }}>TikTok</option>
-                          <option value="linkedin" style={{ background: '#1a1a2e' }}>LinkedIn</option>
-                          <option value="facebook" style={{ background: '#1a1a2e' }}>Facebook</option>
-                          <option value="twitter" style={{ background: '#1a1a2e' }}>X (Twitter)</option>
-                        </select>
+                        <input list="platformOptions" value={newAccount.platform} onChange={e => setNewAccount(s => ({ ...s, platform: e.target.value }))}
+                          placeholder="Type or select platform"
+                          style={{ width: '100%', padding: '0.5rem 0.75rem', borderRadius: 8, marginTop: 4, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.09)', color: '#fff', fontSize: '0.85rem', outline: 'none' }} />
+                        <datalist id="platformOptions">
+                          <option value="instagram">Instagram</option>
+                          <option value="tiktok">TikTok</option>
+                          <option value="linkedin">LinkedIn</option>
+                          <option value="facebook">Facebook</option>
+                          <option value="twitter">X (Twitter)</option>
+                          <option value="youtube">YouTube</option>
+                        </datalist>
                       </div>
                       <div>
                         <label style={{ fontSize: '0.78rem', color: 'rgba(255,255,255,0.4)' }}>Display Name</label>
@@ -511,6 +518,21 @@ export default function SettingsPage() {
                     ? <ToggleRight size={44} color="#22D3EE" />
                     : <ToggleLeft size={44} color="rgba(255,255,255,0.2)" />}
                 </button>
+              </div>
+            </div>
+
+            {/* Risk Tolerance */}
+            <div className="glass-panel" style={{ padding: '1.5rem' }}>
+              <div style={{ fontWeight: 600, color: '#fff', marginBottom: '1rem', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <AlertTriangle size={15} /> Execution Risk Tolerance
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                <input type="range" min="0" max="100" value={riskTolerance} onChange={e => setRiskTolerance(Number(e.target.value))}
+                  style={{ flex: 1, accentColor: '#22D3EE' }} />
+                <div style={{ width: 40, textAlign: 'center', color: '#22D3EE', fontWeight: 600, fontSize: '0.9rem' }}>{riskTolerance}%</div>
+              </div>
+              <div style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.4)', marginTop: 8 }}>
+                Higher risk allows agents to take aggressive, unprompted actions to accomplish goals. Lower risk enforces stricter guardrails and requires more human approvals.
               </div>
             </div>
 
@@ -695,6 +717,9 @@ export default function SettingsPage() {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                 <Field id="smtp_from_name" label="From Name" value={form.smtp_from_name || ''} onChange={set('smtp_from_name')} placeholder="Digital Force" />
                 <Field id="smtp_from_email" label="From Email" value={form.smtp_from_email || ''} onChange={set('smtp_from_email')} placeholder="noreply@yourdomain.com" />
+              </div>
+              <div style={{ marginTop: '1rem' }}>
+                <Field id="target_notification_emails" label="Target Notification Emails (Destination)" value={form.target_notification_emails || ''} onChange={set('target_notification_emails')} placeholder="boss@acme.com, alerts@marketing.com" hint="Comma-separated emails to receive agent alerts and approvals." />
               </div>
               <div style={{ fontSize: '0.78rem', color: 'rgba(255,255,255,0.3)', padding: '0.75rem', background: 'rgba(255,255,255,0.03)', borderRadius: 8 }}>
                 For Gmail: Enable 2FA, then generate an App Password at myaccount.google.com/apppasswords

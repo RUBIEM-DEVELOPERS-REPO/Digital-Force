@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback, KeyboardEvent } from 'react'
 import Sidebar from '@/components/Sidebar'
-import { Send, Trash2, Bot, User, Zap, MessageSquare, Plus, X, Image as ImageIcon } from 'lucide-react'
+import { Send, Trash2, Bot, User, Zap, MessageSquare, Plus, X, Image as ImageIcon, Clock } from 'lucide-react'
 import { AnimatePresence } from 'framer-motion'
 import { getToken } from '@/lib/auth'
 import api, { MediaAsset } from '@/lib/api'
@@ -499,18 +499,37 @@ export default function ChatPage() {
               </span>
             </div>
           )}
-
-          {messages.length > 0 && (
-            <button id="clear-history" onClick={clearHistory}
-              className="btn-ghost" style={{ fontSize: '0.8rem', gap: 6, marginLeft: 'auto' }}>
-              <Trash2 size={14} /> Clear history
-            </button>
-          )}
         </div>
 
-        {/* Messages */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '1.5rem' }}>
-          {historyLoaded && messages.length === 0 ? (
+        {/* Viewport wrapper for floating tools */}
+        <div style={{ flex: 1, position: 'relative', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          
+          {messages.length > 0 && (
+            <div style={{ position: 'absolute', right: 20, top: 20, display: 'flex', flexDirection: 'column', gap: 8, zIndex: 50 }}>
+              <button 
+                onClick={clearHistory} 
+                title="Delete History" 
+                style={{ width: 36, height: 36, borderRadius: '50%', background: 'rgba(15,23,42,0.8)', border: '1px solid rgba(239,68,68,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#EF4444', cursor: 'pointer', transition: 'all 0.2s', backdropFilter: 'blur(10px)' }}>
+                <Trash2 size={16} />
+              </button>
+              <button 
+                onClick={() => alert('Recent sessions feature coming soon.')} 
+                title="Recent Sessions" 
+                style={{ width: 36, height: 36, borderRadius: '50%', background: 'rgba(15,23,42,0.8)', border: '1px solid rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94A3B8', cursor: 'pointer', transition: 'all 0.2s', backdropFilter: 'blur(10px)' }}>
+                <Clock size={16} />
+              </button>
+              <button 
+                onClick={() => setMessages([])} 
+                title="Start a New Session" 
+                style={{ width: 36, height: 36, borderRadius: '50%', background: 'rgba(15,23,42,0.8)', border: '1px solid rgba(0,163,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#00A3FF', cursor: 'pointer', transition: 'all 0.2s', backdropFilter: 'blur(10px)' }}>
+                <Plus size={16} />
+              </button>
+            </div>
+          )}
+
+          {/* Messages */}
+          <div style={{ flex: 1, overflowY: 'auto', padding: '1.5rem', paddingRight: '4rem' }}>
+            {historyLoaded && messages.length === 0 ? (
             <div style={{ maxWidth: 620, margin: '3rem auto', textAlign: 'center' }}>
               <div style={{
                 width: 72, height: 72, borderRadius: 20,
@@ -558,8 +577,7 @@ export default function ChatPage() {
             </div>
           )}
         </div>
-
-
+        </div>
 
         {/* Input */}
         <div style={{

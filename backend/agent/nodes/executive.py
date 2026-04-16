@@ -15,12 +15,19 @@ async def executive_node(state: AgentState) -> dict:
     Reads the latest message, determines if an action/goal is required, and replies directly to the UI.
     """
     user_id = state.get("created_by", "")
+    
+    if state.get("next_agent"):
+        logger.info("[Executive] Bypassing NLP; intent already evaluated by streaming chat API.")
+        return {"next_agent": state.get("next_agent")}
+        
     goal_id = state.get("goal_id")
     messages = state.get("messages", [])
     
     if not messages:
         # Automated trigger / API POST without UI history: skip intent evaluation and go straight to Manager
-        return {"next_agent": "manager"}
+        # BUGFIX: Ensure `messages` is seeded so the Manager does not throw IndexError on `messages[-1]`.
+        state["messages"] = [{"role": "user", "content": "Trigger execution cycle."}]
+        return {"messages": state["messages"], "next_agent": "manager"}
         
     last_message = messages[-1] if isinstance(messages[-1], str) else messages[-1].get("content", "")
     logger.info(f"[Executive] Processing user message: {last_message[:50]}...")

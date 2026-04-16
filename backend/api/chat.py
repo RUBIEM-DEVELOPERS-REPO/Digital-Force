@@ -103,10 +103,81 @@ async def chat_stream(
                 "deadline": active_goal.deadline.isoformat() if active_goal and active_goal.deadline else None,
             }
             
-            # Launch graph in background so we don't block the HTTP request returning 
-            # and the UI can immediately resume polling.
-            asyncio.create_task(execution_graph.ainvoke(initial_state))
+            # ---- LLM EVALUATION (INSTANT STREAMING) ----
+            from agent.llm import generate_json
             
+            agent_tone = "Highly professional, direct, and slightly futuristic"
+            from database import AgencySettings, PlatformConnection
+            from sqlalchemy import or_
+            cfg_res = await db.execute(select(AgencySettings).where(AgencySettings.user_id == user_id))
+            cfg = cfg_res.scalar_one_or_none()
+            if cfg and cfg.agent_tone:
+                agent_tone = cfg.agent_tone
+                
+            prompt = f"""You are the Executive interface of Digital Force, an autonomous AI agency.
+Determine the user's intent from the following message, and reply.
+Your persona and tone: {agent_tone}
+
+Recent context:
+{json.dumps(hist_msgs[-4:], indent=2)}
+
+Determine if the user is asking you to start a task, create a goal, execute something, or analyze data. If yes, it requires the Manager's attention.
+If the user is approving a previously proposed plan, mark approval_status as "approved". If rejecting, mark "rejected". Otherwise "none".
+If the user is explicitly providing credentials, a password, a 2FA code, or telling you to inherently update the 'Truth Bucket' for an account, provide the account name you detect, and the specific text to append to their auth_data bucket.
+
+Return strictly JSON:
+{{
+  "reply": "Your dynamic response to the user, in character.",
+  "requires_manager": <boolean>,
+  "approval_status": "approved" | "rejected" | "none",
+  "update_truth_bucket": {{
+     "account_name_match": "string matching account name (e.g. 'Acme Corp') or null",
+     "text_to_append": "Exact credential string to append safely to DB (e.g. 'Backup pass: 123') or null"
+  }}
+}}"""
+            try:
+                response = await generate_json(prompt)
+                reply = response.get("reply", "Acknowledged.")
+                requires_manager = response.get("requires_manager", False)
+                approval_status = response.get("approval_status", "none")
+                truth_update = response.get("update_truth_bucket")
+                
+                if truth_update and isinstance(truth_update, dict) and truth_update.get("account_name_match"):
+                    account_match = truth_update.get("account_name_match")
+                    text_to_append = truth_update.get("text_to_append")
+                    if text_to_append:
+                        match_str = f"%{account_match}%"
+                        conn = (await db.execute(select(PlatformConnection).where(or_(PlatformConnection.account_label.ilike(match_str), PlatformConnection.display_name.ilike(match_str))))).scalars().first()
+                        if conn:
+                            conn.auth_data = f"{conn.auth_data or ''}\\n[Agent Auto-Saved Update]: {text_to_append}".strip()
+                            await db.commit()
+            except Exception as e:
+                reply = "Acknowledged. Routing internal systems to compensate."
+                requires_manager = True
+                approval_status = "none"
+
+            # Save the agent reply directly to DB so it persists
+            bot_msg_id = str(uuid.uuid4())
+            db.add(ChatMessage(id=bot_msg_id, user_id=user_id, role="agent", agent_name="digital force - executive", content=reply, goal_id=active_goal.id if active_goal else None))
+            await db.commit()
+
+            # STREAM RESULT TO UI IMMEDIATELY
+            yield f"data: {json.dumps({'type': 'bubble_start', 'bubble_id': bot_msg_id})}\\n\\n"
+            chunk_size = 5
+            for i in range(0, len(reply), chunk_size):
+                yield f"data: {json.dumps({'type': 'message', 'content': reply[i:i+chunk_size]})}\\n\\n"
+                await asyncio.sleep(0.01)
+            yield f"data: {json.dumps({'type': 'bubble_end'})}\\n\\n"
+
+            # Launch graph in background explicitly specifying next routing logic
+            if requires_manager:
+                initial_state["next_agent"] = "manager"
+                if approval_status in ["approved", "rejected"]:
+                    initial_state["approval_status"] = approval_status
+            else:
+                initial_state["next_agent"] = "__end__"
+                
+            asyncio.create_task(execution_graph.ainvoke(initial_state))
             yield f"data: {json.dumps({'type': 'done', 'content': ''})}\\n\\n"
         except Exception as e:
             logger.error(f"[Chat] Stream error: {e}")

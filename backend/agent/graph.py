@@ -6,7 +6,6 @@ Hub-and-spoke architecture where Supervisor evaluates state and routes dynamical
 import logging
 from langgraph.graph import StateGraph, END
 from agent.state import AgentState
-from agent.nodes.executive import executive_node
 from agent.nodes.manager import manager_node
 from agent.nodes.orchestrator import orchestrator_node
 from agent.nodes.researcher import researcher_node
@@ -59,7 +58,6 @@ def build_neural_graph() -> StateGraph:
     graph = StateGraph(AgentState)
     
     # Add nodes
-    graph.add_node("executive", executive_node)
     graph.add_node("manager", manager_node)
     graph.add_node("orchestrator", orchestrator_node)
     graph.add_node("researcher", researcher_node)
@@ -73,13 +71,7 @@ def build_neural_graph() -> StateGraph:
     graph.add_node("reflector", reflector_node)
 
     # Set Entry Point
-    graph.set_entry_point("executive")
-
-    # Executive conditional routing
-    graph.add_conditional_edges("executive", manager_router, {
-        "manager": "manager",
-        END: END
-    })
+    graph.set_entry_point("manager")
 
     # Manager conditional routing
     graph.add_conditional_edges("manager", manager_router, {

@@ -43,7 +43,7 @@ async def list_accounts(db: AsyncSession = Depends(get_db), current_user = Depen
         })
     return out
 
-@router.post("/")
+@router.post("")
 async def create_account(account: AccountCreate, db: AsyncSession = Depends(get_db), current_user = Depends(get_current_user)):
     new_account = PlatformConnection(
         id=str(uuid.uuid4()),

@@ -176,6 +176,15 @@ def get_llm_client():
     }
 
 
+def get_tool_llm(temperature: float = 0.3):
+    """Returns a native LangChain ChatGroq instance for bind_tools() capability."""
+    from langchain_groq import ChatGroq
+    configs = _get_cascade_configs()
+    # Returns the primary model in the cascade directly without python rotation. 
+    # Tools require exact schema adherence which Llama 3 overrides support perfectly via Groq.
+    return ChatGroq(model=configs[0][1], api_key=configs[0][0], temperature=temperature, max_retries=1)
+
+
 async def heal_dom_selector(screenshot_path: str, failed_selector: str) -> Optional[str]:
     """Uses Groq Llama-3.2-Vision to hot-patch broken CSS selectors from a DOM snapshot."""
     key = settings.groq_api_key_1 or settings.groq_api_key_2 or settings.groq_api_key_3
